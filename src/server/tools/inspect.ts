@@ -5,6 +5,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { guardRef } from "../../actions/ref-guard.js";
 import { captureSnapshot } from "../../extraction/snapshot.js";
 import { inspectStyle } from "../../extraction/style-probe.js";
 import type { SessionManager } from "../../session/manager.js";
@@ -43,6 +44,8 @@ export function registerInspectTool(server: McpServer, sessions: SessionManager)
     async (args) => {
       const a = args as Record<string, unknown>;
       return withSession(sessions, String(a.sessionId), async (s) => {
+        const stale = await guardRef(s.page, a.ref as string | number);
+        if (stale) return errorResult(`ref_stale (${String(stale.reason)}): ${String(stale.hint)}`, "ref_stale");
         await captureSnapshot(s.page);
         const report = await inspectStyle(s.page, String(a.ref));
         return report ? jsonResult({ ...report }) : errorResult("ref_not_found");

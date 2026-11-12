@@ -10,7 +10,7 @@ import { toAgentOptions } from "../map-options.js";
 import { progressReporter } from "../progress.js";
 import { jsonResult } from "../result.js";
 import { agentOptionShape } from "../schemas.js";
-import { domainRankSchema, serpResultSchema } from "./schemas-serp-output.js";
+import { domainRankSchema, serpResultSchema, serpWarningSchema } from "./schemas-serp-output.js";
 
 /** One query's outcome (matches `interfaces/serp.ts#SerpBatchRow`). */
 const serpBatchRowSchema = z.object({
@@ -18,6 +18,7 @@ const serpBatchRowSchema = z.object({
   rank: domainRankSchema.optional(),
   results: z.array(serpResultSchema),
   error: z.string().optional(),
+  warning: serpWarningSchema.optional(),
 });
 
 /** `browser_serp_batch` output shape: one SERP row per query. */

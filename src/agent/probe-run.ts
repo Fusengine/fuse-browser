@@ -12,6 +12,7 @@ import { selectEngineForConfig } from "../engine/registry.js";
 import { teardownOpened } from "../engine/teardown.js";
 import { mainText } from "../extraction/main-text.js";
 import { visualObservation } from "../extraction/visual.js";
+import type { Challenges } from "../interfaces/extraction.js";
 import type { ProbeReport } from "../interfaces/report.js";
 import type { ProbeOptions } from "../interfaces/types.js";
 import { sha1 } from "../lib/fs.js";
@@ -30,6 +31,24 @@ import { attachListeners } from "./network.js";
 import { extractSerpStep } from "./serp-step.js";
 import { huntContacts } from "./contact-hunt.js";
 import { buildReport } from "./report.js";
+
+/**
+ * Report a pool proxy as blocked when the page is a block/challenge (Cloudflare,
+ * a captcha widget or an AWS WAF challenge). No-op for non-pool proxies or when
+ * challenges were not detected.
+ *
+ * @param config - Resolved config (proxy source and URL).
+ * @param challenges - Result of the challenge detection (`{}` when it did not run).
+ * @param report - Reporter, injectable for tests.
+ */
+export function reportBlockedProxy(
+  config: Pick<ResolvedConfig, "proxySource" | "proxyUrl">,
+  challenges: Partial<Challenges>,
+  report: (proxyUrl: string) => void = reportProxyBlocked,
+): void {
+  if (config.proxySource !== "pool" || !config.proxyUrl || !("cloudflare" in challenges)) return;
+  if (challenges.cloudflare || challenges.captcha || challenges.awsWaf) report(config.proxyUrl);
+}
 
 /** Run one probe against `url` and return the assembled report. */
 export async function runProbe(
@@ -64,7 +83,7 @@ export async function runProbe(
     const first = await mainText(page);
     const { text, title } = await reExtractIfEmpty(page, first, await page.title());
     const { challenges, captcha } = await detectAndSolve(page, text, options, config);
-    if (config.proxySource === "pool" && config.proxyUrl && "cloudflare" in challenges && (challenges.cloudflare || challenges.captcha)) reportProxyBlocked(config.proxyUrl);
+    reportBlockedProxy(config, challenges);
     await page.screenshot({ path: screenshotPath, fullPage: true });
     const visual = options.observeVisual ? await visualObservation(page, screenshotPath) : {};
     const serp = await extractSerpStep(page, options, config);

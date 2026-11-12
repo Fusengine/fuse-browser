@@ -8,7 +8,7 @@
  */
 
 /** Visible text below this (chars) is "thin" — too little to be the real content. */
-const THIN_TEXT_CHARS = 600;
+export const THIN_TEXT_CHARS = 600;
 
 /** Minimum `<script>` tags that, with thin text, suggest a JS-rendered page. */
 const SCRIPT_HEAVY = 3;

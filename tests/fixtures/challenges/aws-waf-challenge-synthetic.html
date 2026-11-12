@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- SYNTHETIC, not a real capture. Built from AWS WAF's own documentation of the Challenge action: header
+     x-amzn-waf-action: challenge, HTTP 202, and for Accept: text/html a JavaScript page interstitial with a
+     challenge script (silent, no puzzle):
+     https://docs.aws.amazon.com/waf/latest/developerguide/waf-captcha-and-challenge-actions.html
+     AWS publishes no markup of the interstitial: the script host/path (awswaf.com) and the
+     awsWafCookieDomainList global are NOT from that page. -->
+<html lang="en">
+<head>
+<title></title>
+<script type="text/javascript" src="https://0000.edge.sdk.awswaf.com/0000/0000/challenge.js" defer></script>
+</head>
+<body>
+<script type="text/javascript">
+  window.awsWafCookieDomainList = [];
+  window.gokuProps = { key: "0000", iv: "0000", context: "0000" };
+</script>
+</body>
+</html>

@@ -19,9 +19,11 @@ import { registerExtractTool } from "./tools/extract.js";
 import { registerExtractSchemaTool } from "./tools/extract-schema.js";
 import { registerFetchTool } from "./tools/fetch.js";
 import { registerFetchBatchTool } from "./tools/fetch-batch.js";
+import { registerFindTool } from "./tools/find.js";
 import { registerHandoffTool } from "./tools/handoff.js";
 import { registerInspectTool } from "./tools/inspect.js";
 import { registerLiveViewTool } from "./tools/live-view.js";
+import { registerMapTool } from "./tools/map.js";
 import { registerLogTools } from "./tools/logs.js";
 import { registerMetricsTool } from "./tools/metrics.js";
 import { registerNavigateTool } from "./tools/navigate.js";
@@ -39,6 +41,7 @@ import { registerSiteShotsTool } from "./tools/site-shots.js";
 import { registerSnapshotTools } from "./tools/snapshot.js";
 import { registerTabsTool } from "./tools/tabs.js";
 import { registerVaultTool } from "./tools/vault.js";
+import { registerVerifyTool } from "./tools/verify.js";
 import { registerVisualDiffTool } from "./tools/visual-diff.js";
 import { registerWaitTool } from "./tools/wait.js";
 
@@ -56,6 +59,8 @@ export function toolGroups(
       () => registerTabsTool(server, sessions),
       () => registerDialogTools(server, sessions),
       () => registerSnapshotTools(server, sessions),
+      () => registerFindTool(server, sessions),
+      () => registerVerifyTool(server, sessions),
       () => registerWaitTool(server, sessions),
       () => registerScreenshotTool(server, sessions),
       () => registerAutoScrollTool(server, sessions),
@@ -66,6 +71,7 @@ export function toolGroups(
       () => registerFetchTool(server),
       () => registerFetchBatchTool(server),
       () => registerCrawlTool(server),
+      () => registerMapTool(server),
       () => registerCollectBatchTool(server),
       () => registerShotsBatchTool(server),
       () => registerSiteShotsTool(server),

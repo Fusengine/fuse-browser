@@ -97,6 +97,19 @@ accepts an optional `proxyUrl`.
   a real DOM.
 - **Fallback:** for anything in the "does not pass" list, use `browser_probe`
   (full stealth browser).
+- **A block is reported, not passed off as a page.** When the response is a
+  challenge interstitial (Cloudflare, DataDome, AWS WAF), `browser_fetch` /
+  `browser_fetch_batch` / `browser_crawl` return `blocked: true`, `blockedBy`
+  and a `hint` instead of an ordinary-looking result. This is detection and
+  routing only — nothing is solved or evaded: next step is `browserFallback:
+  true` (or `FUSE_FETCH_ESCALATE_BLOCKED=1` server-side), then a session
+  (`browser_open` → `browser_navigate` → `browser_extract`), then
+  `browser_handoff` when the live page shows a human step (CAPTCHA /
+  Turnstile). Whether a real browser passes a given challenge depends on the
+  site and on the client's reputation at that moment — see
+  [blocked-fast-path-live-check-2026-11-11.md](./blocked-fast-path-live-check-2026-11-11.md).
+  Signals and combination rules: `src/net/block-signals.ts`,
+  `src/net/block-detect.ts`.
 
 ## Captcha solver (opt-in — authorized testing only)
 

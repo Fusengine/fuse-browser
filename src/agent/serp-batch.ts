@@ -50,7 +50,12 @@ export async function serpBatch(config: ResolvedConfig, opts: SerpBatchOptions):
         const url = googleUrl(query, opts.hl ?? "en", opts.gl ?? "us");
         await withBreaker(url, config.circuitBreaker, () => gotoWithRetry(page, url, DEFAULT_GOTO, config.retry));
         const serp = await collectSerp(page, opts.pages ?? 1, config.retry);
-        rows.push({ query, results: serp.organic, rank: opts.rankDomain ? findDomainRanks(serp, opts.rankDomain) : undefined });
+        rows.push({
+          query,
+          results: serp.organic,
+          rank: opts.rankDomain ? findDomainRanks(serp, opts.rankDomain) : undefined,
+          ...(serp.warning ? { warning: serp.warning } : {}),
+        });
       } catch (error) {
         rows.push({ query, results: [], error: String(error) });
       }

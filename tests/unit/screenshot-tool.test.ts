@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Page } from "playwright";
 import { z } from "zod";
+import { registryFor } from "../../src/actions/ref-registry.js";
 import { screenshotOutputShape } from "../../src/server/tools/screenshot-result.js";
 import { registerScreenshotTool } from "../../src/server/tools/screenshot.js";
 import type { SessionManager } from "../../src/session/manager.js";
@@ -33,11 +35,12 @@ function mockServer(): { server: McpServer; getHandler: () => Handler } {
 
 /** Locator/Frame/Page fakes covering ref-locator, snapshot, and annotate paths. */
 function fakePage() {
-  const locator = { count: async () => 1, screenshot: async () => Buffer.from("PNG-ELEMENT") };
+  const live = { tag: "button", role: null, id: null, name: null, type: null, href: null, text: "Go", title: null, doc: "d1", owned: true, editable: false };
+  const locator = { count: async () => 1, screenshot: async () => Buffer.from("PNG-ELEMENT"), evaluate: async () => live };
   const frame = {
-    locator: () => ({ first: () => locator }),
+    locator: () => ({ first: () => locator, count: async () => 1 }),
     isDetached: () => false,
-    evaluate: async () => [],
+    evaluate: async () => ({ count: 1, live }),
   };
   const page = {
     frames: () => [frame],
@@ -63,7 +66,12 @@ function fakeSessions(page: ReturnType<typeof fakePage>): SessionManager {
 describe("browser_screenshot outputSchema", () => {
   test("element ref branch: structuredContent parses against the schema", async () => {
     const { server, getHandler } = mockServer();
-    registerScreenshotTool(server, fakeSessions(fakePage()));
+    const page = fakePage();
+    registryFor(page as unknown as Page).begin({
+      elements: [{ index: 0, ref: "3", tag: "button", text: "Go", role: null, id: null, name: null, type: null, href: null, visible: true, box: { x: 0, y: 0, width: 1, height: 1 } }],
+      docs: { 0: "d1" },
+    });
+    registerScreenshotTool(server, fakeSessions(page));
     const res = await getHandler()({ sessionId: "s", ref: 3 });
     expect(res.structuredContent).toBeDefined();
     expect(() => outputSchema.parse(res.structuredContent)).not.toThrow();

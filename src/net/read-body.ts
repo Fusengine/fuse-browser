@@ -34,6 +34,26 @@ function dropPartialTrailingUtf8(buf: Buffer): Buffer {
  * @returns The decoded body, truncated to `maxBytes` on a clean UTF-8 boundary.
  */
 export async function readCappedText(res: ImpitResponse, maxBytes: number): Promise<string> {
+  const { buffer, truncated } = await readCappedBuffer(res, maxBytes);
+  return decodeCapped(res, buffer, truncated);
+}
+
+/**
+ * Charset-decode a buffer produced by {@link readCappedBuffer}. A truncated
+ * buffer is already hard-cut to the cap; any split trailing char is backed off.
+ */
+export function decodeCapped(res: ImpitResponse, buffer: Buffer, truncated: boolean): string {
+  return res.decodeBuffer(truncated ? dropPartialTrailingUtf8(buffer) : buffer);
+}
+
+/**
+ * Read at most `maxBytes` of the `res` body as raw bytes (no charset decoding).
+ *
+ * @param res - The impit response to drain.
+ * @param maxBytes - Hard cap; the stream is cancelled once reached.
+ * @returns The bytes (hard-cut to `maxBytes`) and whether the body was longer than the cap.
+ */
+export async function readCappedBuffer(res: ImpitResponse, maxBytes: number): Promise<{ buffer: Buffer; truncated: boolean }> {
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -48,7 +68,6 @@ export async function readCappedText(res: ImpitResponse, maxBytes: number): Prom
       break;
     }
   }
-  if (total <= maxBytes) return res.decodeBuffer(Buffer.concat(chunks, total));
-  // Truncated: hard-cut to the cap, then back off any split trailing char.
-  return res.decodeBuffer(dropPartialTrailingUtf8(Buffer.concat(chunks, maxBytes)));
+  if (total <= maxBytes) return { buffer: Buffer.concat(chunks, total), truncated: false };
+  return { buffer: Buffer.concat(chunks, maxBytes), truncated: true };
 }

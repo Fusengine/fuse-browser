@@ -18,6 +18,8 @@ export interface FetchBatchOptions {
   maxChars?: number;
   browserFallback?: boolean;
   proxyUrl?: string;
+  /** Also try each URL's `.md` twin (see `net/doc-markdown`). */
+  preferMarkdown?: boolean;
   concurrency?: number;
   /** Called after each URL settles (success or failure): `(done, total, url)`. */
   onProgress?: (done: number, total: number, label?: string) => void;
@@ -41,6 +43,7 @@ export async function fetchBatch(urls: string[], opts: FetchBatchOptions = {}): 
       const { rendered } = await fetchAndRender(url, {
         browserFallback: opts.browserFallback,
         proxyUrl: opts.proxyUrl,
+        preferMarkdown: opts.preferMarkdown,
         format: opts.format,
         maxChars: opts.maxChars,
       });

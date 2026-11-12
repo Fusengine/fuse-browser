@@ -31,7 +31,9 @@ describe("detectChallenges — awsWaf (additive)", () => {
   test("existing fields keep working unchanged (regression guardrail)", async () => {
     const page = makePage("https://example.com/");
     const result = await detectChallenges(page, "Please solve the captcha to continue");
-    expect(result.captcha).toBe(true);
+    expect(result.captcha).toBe(false); // a word is not a widget (evidence-based since 2026-11-11)
+    const withWidget = await detectChallenges(makePage("https://example.com/", { ...noFlags, recaptcha: true }), "");
+    expect(withWidget.captcha).toBe(true);
     expect(result.awsWaf).toBe(false);
   });
 });

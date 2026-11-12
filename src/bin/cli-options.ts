@@ -61,4 +61,6 @@ export const CLI_OPTIONS: ParseArgsOptions = {
   output: { type: "string" },
   limit: { type: "string" },
   "block-resources": { type: "string" },
+  tokens: { type: "boolean" },
+  preset: { type: "string" },
 };

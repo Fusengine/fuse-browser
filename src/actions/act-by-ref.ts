@@ -18,7 +18,7 @@ import { type FilesInput, setFiles } from "./upload.js";
 export type RefActionKind = "click" | "fill" | "select" | "pick" | "upload" | "hover" | "drag";
 
 /** Snapshot refs are numeric (`"5"` or frame-scoped `"3:4"`); anything else is a CSS selector. */
-function isRef(value: string): boolean {
+export function isRef(value: string): boolean {
   return /^\d+(:\d+)?$/.test(value);
 }
 
