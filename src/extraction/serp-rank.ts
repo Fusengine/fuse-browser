@@ -13,10 +13,16 @@ function normalizeHost(value: string): string {
     .toLowerCase();
 }
 
+/** Result host: for a Google redirect wrapper the host of the display breadcrumb (`https://host › a › b`). */
+function resultHost(r: SerpResult): string {
+  if (!r.redirect) return normalizeHost(r.url);
+  return normalizeHost((r.displayUrl ?? "").split(/\s/)[0] ?? "");
+}
+
 function positionsFor(results: SerpResult[], target: string): number[] {
   return results
     .filter((r) => {
-      const host = normalizeHost(r.url);
+      const host = resultHost(r);
       return host === target || host.endsWith(`.${target}`);
     })
     .map((r) => r.position);

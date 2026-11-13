@@ -1,0 +1,22 @@
+{
+ "origin": "real response, one plain GET, 2026-11-11, sanitized (cookies, ray ids, IPs, tokens, inline CSS removed)",
+ "url": "https://www.stockx.com/",
+ "status": 403,
+ "headers": {
+  "cf-mitigated": "challenge",
+  "cf-ray": "0000000000000000-ZRH",
+  "content-security-policy": "default-src 'none'; script-src 'nonce-LWvqRpzxRt3YqJyhb4OpAa' 'unsafe-eval' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'unsafe-inline'; img-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com blob:; child-src 'self' https://challenges.cloudflare.com blob:; worker-src blob:; form-action http: https:; base-uri 'self'",
+  "content-type": "text/html; charset=UTF-8",
+  "cross-origin-embedder-policy": "require-corp",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+  "origin-agent-cluster": "?1",
+  "referrer-policy": "same-origin",
+  "server": "cloudflare",
+  "server-timing": "chlray;desc=\"0000000000000000\"",
+  "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "SAMEORIGIN"
+ },
+ "html": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=Edge\"><meta name=\"robots\" content=\"noindex,nofollow\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"content-security-policy\" content=\"default-src &#39;none&#39;; script-src &#39;nonce-LWvqRpzxRt3YqJyhb4OpAa&#39; &#39;unsafe-eval&#39; https://challenges.cloudflare.com; script-src-attr &#39;none&#39;; style-src &#39;unsafe-inline&#39;; img-src &#39;self&#39; https://challenges.cloudflare.com; connect-src &#39;self&#39; https://challenges.cloudflare.com; frame-src &#39;self&#39; https://challenges.cloudflare.com blob:; child-src &#39;self&#39; https://challenges.cloudflare.com blob:; worker-src blob:; form-action http: https:; base-uri &#39;self&#39;\"><style>/* stripped */</style><meta http-equiv=\"refresh\" content=\"360\"></head><body><div class=\"main-wrapper\" role=\"main\"><div class=\"main-content\"><noscript><div class=\"h2\"><span id=\"challenge-error-text\">Enable JavaScript and cookies to continue</span></div></noscript></div></div><script nonce=\"LWvqRpzxRt3YqJyhb4OpAa\">(function(){window._cf_chl_opt = {cFPWv: 'b',cH: 'REDACTED',cITimeS: '1794407539',cN: 'LWvqRpzxRt3YqJyhb4OpAa',cRay: '0000000000000000',cTplC:0,cTplO:0,cTplV:5,cType: 'managed',cUPMDTk:\"/?REDACTED\",cvId: '3',cZone: 'www.stockx.com',fa:\"/?REDACTED\",md: 'REDACTED',mdrd: 'REDACTED',};var a = document.createElement('script');a.nonce = 'LWvqRpzxRt3YqJyhb4OpAa';a.src = 'REDACTED?ray=0000000000000000';window._cf_chl_opt.cOgUHash = location.hash === '' && location.href.indexOf('#') !== -1 ? '#' : location.hash;window._cf_chl_opt.cOgUQuery = location.search === '' && location.href.slice(0, location.href.length - window._cf_chl_opt.cOgUHash.length).indexOf('?') !== -1 ? '?' : location.search;if (window.history && window.history.replaceState) {var ogU = location.pathname + window._cf_chl_opt.cOgUQuery + window._cf_chl_opt.cOgUHash;history.replaceState(null, null,\"/?REDACTED\"+ window._cf_chl_opt.cOgUHash);a.onload = function() {history.replaceState(null, null, ogU);}}document.getElementsByTagName('head')[0].appendChild(a);}());</script></body></html>"
+}

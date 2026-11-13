@@ -10,7 +10,8 @@
  * @module server/tools/snapshot-output
  */
 import { z } from "zod";
-import { actionResultShape } from "./act.js";
+import { BUDGET_OUTPUT_SHAPE } from "../output-budget.js";
+import { actionResultShape, effectShape } from "./act.js";
 
 /** Mirrors `InteractiveElement` (interfaces/extraction.ts). */
 export const interactiveElementShape = z.object({
@@ -38,11 +39,20 @@ export const interactiveElementShape = z.object({
   selector: z.string().nullable().optional(),
 });
 
-/** `browser_snapshot` outputSchema: `{ url, count, elements[, marks] }`. */
+/**
+ * `browser_snapshot` outputSchema: `{ url, generation, count, elements, truncated,
+ * dropped[, hint, marks] }`.
+ */
 export const snapshotOutputShape = {
+  ...BUDGET_OUTPUT_SHAPE,
   url: z.string(),
+  generation: z.number(),
   count: z.number(),
   elements: z.array(interactiveElementShape),
+  truncated: z.boolean(),
+  dropped: z.number(),
+  scope: z.object({ matched: z.number(), error: z.string().optional() }).optional(),
+  hint: z.string().optional(),
   marks: z.number().optional(),
 };
 
@@ -63,5 +73,7 @@ export const actOutputShape = {
   result: actionResultShape,
   url: z.string(),
   diff: snapshotDiffShape,
+  effect: effectShape.optional(),
+  generation: z.number().optional(),
   marks: z.number().optional(),
 };

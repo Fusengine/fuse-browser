@@ -12,7 +12,11 @@ export const serpResultSchema = z.object({
   url: z.string(),
   displayUrl: z.string().optional(),
   snippet: z.string().optional(),
+  redirect: z.boolean().optional(),
 });
+
+/** Why a SERP has zero results (matches `interfaces/serp.ts#SerpWarning`). */
+export const serpWarningSchema = z.enum(["no_results_extracted", "consent_wall", "blocked"]);
 
 /** Where a domain ranks in a SERP (matches `interfaces/serp.ts#DomainRank`). */
 export const domainRankSchema = z.object({
@@ -29,4 +33,5 @@ export const serpSchema = z.object({
   ads: z.array(serpResultSchema),
   related: z.array(z.string()),
   rank: domainRankSchema.optional(),
+  warning: serpWarningSchema.optional(),
 });

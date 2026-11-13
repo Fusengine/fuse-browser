@@ -4,9 +4,11 @@
  * HTML (price/index/SERP pages); JS/SPA pages still need `browser_probe`.
  * @module net/fetch-fast
  */
+import { gunzipSync } from "node:zlib";
 import { Impit } from "impit";
 import { assertNetworkAllowed } from "./private-net-guard.js";
-import { readCappedText } from "./read-body.js";
+import { isPdf } from "./pdf-extract.js";
+import { decodeCapped, readCappedBuffer } from "./read-body.js";
 
 export { htmlToText, isHtmlContentType } from "./fetch-fast-text.js";
 import { htmlToText, isHtmlContentType } from "./fetch-fast-text.js";
@@ -24,6 +26,23 @@ function client(proxyUrl?: string): Impit {
   return shared;
 }
 
+/** Per-call options of {@link fetchFast}. */
+export interface FastOptions {
+  /** Decompress a body that is gzip-compressed on disk (e.g. `sitemap.xml.gz`, served as `application/gzip`). Off by default. */
+  gunzip?: boolean;
+}
+
+const isGzip = (b: Uint8Array): boolean => b[0] === 0x1f && b[1] === 0x8b;
+
+/** Gunzip to UTF-8 text, output capped at 5x the download cap; "" if corrupt or over the cap. */
+function gunzipText(b: Uint8Array): string {
+  try {
+    return gunzipSync(b, { maxOutputLength: MAX_DOWNLOAD_BYTES * 5 }).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
 /** Result of a fast HTTP fetch. */
 export interface FastResponse {
   status: number;
@@ -32,8 +51,12 @@ export interface FastResponse {
   text: string;
   /** Response `content-type` (lowercased, "" if absent). */
   contentType: string;
+  /** Response headers, lowercase names (feeds anti-bot interstitial detection). */
+  headers: Record<string, string>;
   /** Whether the body is HTML — drives markdown conversion vs. raw passthrough. */
   isHtml: boolean;
+  /** Set (and `html`/`text` empty) when the body is a PDF: the raw bytes, to be read by `pdfToText`. */
+  pdf?: { bytes: Uint8Array; truncated: boolean };
 }
 
 /**
@@ -47,12 +70,21 @@ export interface FastResponse {
  * unless `FUSE_BLOCK_PRIVATE_NETS=1` (see `net/private-net-guard.ts` for the
  * documented redirect/IP coverage gap).
  */
-export async function fetchFast(url: string, proxyUrl?: string): Promise<FastResponse> {
+export async function fetchFast(url: string, proxyUrl?: string, opts: FastOptions = {}): Promise<FastResponse> {
   await assertNetworkAllowed(url);
   const res = await client(proxyUrl).fetch(url, { headers: { Accept: ACCEPT } });
   await assertNetworkAllowed(res.url || url);
-  const body = await readCappedText(res, MAX_DOWNLOAD_BYTES);
   const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const headers: Record<string, string> = {};
+  res.headers.forEach((value: string, name: string) => {
+    headers[name.toLowerCase()] = value;
+  });
+  const { buffer, truncated } = await readCappedBuffer(res, MAX_DOWNLOAD_BYTES);
+  if (isPdf(contentType, buffer)) {
+    // Binary: never decoded as text — `resolveFetchBody` turns it into page-marked text.
+    return { status: res.status, url: res.url || url, html: "", text: "", contentType, headers, isHtml: false, pdf: { bytes: buffer, truncated } };
+  }
+  const body = opts.gunzip && isGzip(buffer) ? gunzipText(buffer) : decodeCapped(res, buffer, truncated);
   const isHtml = isHtmlContentType(contentType);
   // `text` is lazy + memoized: HTML→text parsing only runs if a consumer reads
   // it (e.g. extractPrices), so the common markdown path skips a linkedom parse.
@@ -62,6 +94,7 @@ export async function fetchFast(url: string, proxyUrl?: string): Promise<FastRes
     url: res.url || url,
     html: body,
     contentType,
+    headers,
     isHtml,
     get text(): string {
       return (textCache ??= isHtml ? htmlToText(body) : body);

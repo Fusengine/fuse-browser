@@ -1,6 +1,6 @@
 # CLI
 
-`fuse-browser` is a command-line front-end for the browser agent. It exposes 15 one-shot subcommands — nine batch/fast-path commands (`probe`, `fetch`, `fetch-batch`, `crawl`, `collect-batch`, `serp-batch`, `shots`, `shots-batch`, `site-shots`) plus six [page commands](#page-commands-one-shot) (`run`, `products`, `extract`, `snapshot`, `screenshot`, `inspect`) — that all share a single flag parser (`node:util` `parseArgs`, strict mode), so any flag is accepted globally but only consumed by the subcommands documented below. Stateful, multi-turn session interaction (open → navigate → click → snapshot → …) is exposed through the MCP server (`browser-mcp`), not the CLI.
+`fuse-browser` is a command-line front-end for the browser agent. It exposes 15 one-shot subcommands — nine batch/fast-path commands (`probe`, `fetch`, `fetch-batch`, `crawl`, `collect-batch`, `serp-batch`, `shots`, `shots-batch`, `site-shots`) plus six [page commands](#page-commands-one-shot) (`run`, `products`, `extract`, `snapshot`, `screenshot`, `inspect`) — plus [`tools --tokens`](#tools---tokens) and `vault` — that all share a single flag parser (`node:util` `parseArgs`, strict mode), so any flag is accepted globally but only consumed by the subcommands documented below. Stateful, multi-turn session interaction (open → navigate → click → snapshot → …) is exposed through the MCP server (`browser-mcp`), not the CLI.
 
 ```
 fuse-browser probe <url> [flags]
@@ -174,6 +174,19 @@ fuse-browser inspect https://example.com --ref 0
 
 ---
 
+## `tools --tokens`
+
+Print the size of the tool definitions the MCP server advertises in `tools/list`, so the context cost is visible: one row per tool (largest first, with its capability group), per-group subtotals and the total.
+
+```bash
+fuse-browser tools --tokens                 # active surface: FUSE_PRESET (default full), narrowed by FUSE_CAPS
+fuse-browser tools --tokens --preset docs   # a named preset: full | docs | qa
+```
+
+Bytes are the UTF-8 length of the compact JSON of `name` + `description` + `inputSchema` + `outputSchema`. Tokens are an **estimate** (`ceil(bytes / 4)`, no tokenizer is bundled); the method is printed above every table. The last line adds the whole advertised tool objects (title and [annotations](./mcp-tools.md#tool-annotations) included). `--preset` takes precedence over `FUSE_PRESET`; an unknown name exits `1`. `tools` without `--tokens` prints the usage text and exits `1`. The server itself takes the same flag: `browser-mcp --preset <name>`.
+
+---
+
 ## `vault <set|list|rm|test>`
 
 Manage the local encrypted credential vault (AES-256-GCM). Secrets are read from stdin **without echo**, never from argv, and never leave the machine except to fill a field in the browser. This is the only vault write path — the MCP surface is read-only.
@@ -209,6 +222,8 @@ Sensitive actions (pay / book / checkout / confirm) are blocked unless `--approv
 | `--text` | boolean | Return raw text instead of markdown (fetch, fetch-batch). |
 | `--format` | string | Output format `markdown` or `text` (fetch, fetch-batch). |
 | `--concurrency` | string | Max parallel fetches; parsed as a number (fetch-batch). |
+| `--tokens` | boolean | Print advertised tool-definition sizes (`tools --tokens`). |
+| `--preset` | string | Task preset `full` / `docs` / `qa` (`tools --tokens`, and `browser-mcp --preset`). |
 | `--help`, `-h` | boolean | Print usage and exit (both `fuse-browser` and `browser-mcp`). |
 | `--version`, `-v` | boolean | Print the package version and exit (both bins). |
 | `--max-pages` | string | Crawl page cap; parsed as a number (crawl). |

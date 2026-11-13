@@ -6,20 +6,19 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { logger } from "../lib/logger.js";
 import { createServer } from "../server/server.js";
-import { firstFlag, handleMetaFlags } from "./cli-meta.js";
+import { PRESET_NAMES } from "../server/presets.js";
+import { handleMetaFlags, parseArgsOrExit } from "./cli-meta.js";
+import { presetFromFlag } from "./preset-flag.js";
 
 // Resolve metadata flags before the stdio transport binds — any stdout write
 // after `server.connect` would corrupt the MCP protocol stream.
 const argv = process.argv.slice(2);
-handleMetaFlags(argv, "usage: browser-mcp [--help] [--version]\n");
-const badFlag = firstFlag(argv);
-if (badFlag) {
-  process.stderr.write(`error: Unknown option '${badFlag}'\n`);
-  process.exit(1);
-}
+handleMetaFlags(argv, `usage: browser-mcp [--preset ${PRESET_NAMES.join("|")}] [--help] [--version]\n`);
+const { values } = parseArgsOrExit({ args: argv, allowPositionals: true, options: { preset: { type: "string" } } });
+const presetFlag = presetFromFlag(values.preset);
 
 async function main(): Promise<void> {
-  const { server, sessions } = createServer();
+  const { server, sessions } = createServer({ preset: presetFlag });
   let closing = false;
   const shutdown = async (): Promise<void> => {
     if (closing) return;

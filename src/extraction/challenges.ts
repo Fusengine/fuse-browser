@@ -1,41 +1,24 @@
 /**
- * Detection of anti-bot and authentication challenges.
+ * Detection of anti-bot and authentication challenges. Flags fire on challenge
+ * evidence (widgets, vendor markers, login-wall wording), not on a bare word in
+ * the page content — see `challenge-evidence`.
  * @module extraction/challenges
  */
 import type { Page } from "playwright";
 import type { Challenges } from "../interfaces/extraction.js";
-import { evalScript } from "../lib/evaluate.js";
-
-const DOM_FLAGS_SCRIPT = `() => ({
-  recaptcha: Boolean(document.querySelector('.g-recaptcha, iframe[src*="recaptcha"]')),
-  turnstile: Boolean(document.querySelector('input[name="cf-turnstile-response"], iframe[src*="turnstile"]')),
-  hcaptcha: Boolean(document.querySelector('.h-captcha, iframe[src*="hcaptcha"]')),
-  password: Boolean(document.querySelector('input[type="password"]')),
-  awsWaf: Boolean(window.awsWafCookieDomainList),
-})`;
-
-interface DomFlags {
-  recaptcha: boolean;
-  turnstile: boolean;
-  hcaptcha: boolean;
-  password: boolean;
-  awsWaf: boolean;
-}
+import { hasCloudflareChallenge, hasLoginWall, readDomFlags } from "./challenge-evidence.js";
 
 /** Combine DOM and text signals to detect captcha, Cloudflare, login, OTP. */
 export async function detectChallenges(page: Page, text: string): Promise<Challenges> {
   const lowered = text.toLowerCase();
-  const flags = await evalScript<DomFlags>(page, DOM_FLAGS_SCRIPT);
-  const captcha = Boolean(
-    flags.recaptcha || flags.hcaptcha || lowered.includes("captcha") || lowered.includes("i'm not a robot"),
-  );
+  const flags = await readDomFlags(page);
+  const captcha = Boolean(flags.captchaWidget || flags.recaptcha || flags.hcaptcha);
   return {
     captcha,
-    turnstile: Boolean(flags.turnstile || lowered.includes("turnstile")),
-    hcaptcha: Boolean(flags.hcaptcha || lowered.includes("hcaptcha")),
-    cloudflare:
-      lowered.includes("checking if the site connection is secure") || lowered.includes("cloudflare"),
-    login: Boolean(flags.password || lowered.includes("sign in") || lowered.includes("log in")),
+    turnstile: Boolean(flags.turnstile),
+    hcaptcha: Boolean(flags.hcaptcha),
+    cloudflare: hasCloudflareChallenge(lowered, flags),
+    login: Boolean(flags.password || hasLoginWall(lowered)),
     otp:
       lowered.includes("one-time") ||
       lowered.includes("verification code") ||

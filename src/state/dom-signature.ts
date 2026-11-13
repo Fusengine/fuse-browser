@@ -9,7 +9,7 @@ import { sha1 } from "../lib/fs.js";
 const SIGNATURE_SCRIPT = `() => JSON.stringify({
   text: document.body?.innerText || '',
   buttons: [...document.querySelectorAll('button,a,input,select,textarea')]
-    .map(el => [el.tagName, el.innerText, el.value, el.getAttribute('aria-label'), el.id, el.className])
+    .map(el => [el.tagName, el.innerText, el.value, el.getAttribute('aria-label'), el.id, el.className, el.checked === true])
 })`;
 
 /** Compute a SHA-1 fingerprint of the current DOM state. */

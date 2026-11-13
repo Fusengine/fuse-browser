@@ -16,6 +16,13 @@ export const hotelOffersSchema = z.object({
   bestTotal: hotelOfferSchema.nullable().optional(),
 });
 
+/** Optional block verdict of a session route (matches `extraction/challenge-verdict.ts#SessionBlock`). */
+export const sessionBlockShape = {
+  blocked: z.boolean().optional(),
+  blockedBy: z.string().optional(),
+  hint: z.string().optional(),
+};
+
 /** Matches `interfaces/extraction.ts#Challenges` (or `{}` when undetected). */
 export const challengesSchema = z.object({
   captcha: z.boolean().optional(),

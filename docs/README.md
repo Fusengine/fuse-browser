@@ -7,7 +7,7 @@ New here? Start with the root [README](../README.md), then dive in:
 | --- | --- |
 | [Installation](./installation.md) | Requirements, install, Chromium, MCP registration, the three ways to get a browser |
 | [CLI](./cli.md) | `probe` / `fetch` / `fetch-batch` / `crawl` / `collect-batch` / `shots` / `shots-batch` / `site-shots` / `serp-batch` + one-shot page commands (`run` / `products` / `extract` / `snapshot` / `screenshot` / `inspect`) + every flag |
-| [MCP tools](./mcp-tools.md) | All 51 tools with parameters and examples |
+| [MCP tools](./mcp-tools.md) | All 54 tools with parameters and examples |
 | [Configuration](./configuration.md) | `AgentOptions`, `FUSE_*` env vars, identity, retry, output location |
 | [Sessions](./sessions.md) | Session lifecycle, auto crash recovery, `storageState` auto-save, HAR record/replay, CDP attach |
 | [Extraction](./extraction.md) | `browser_extract` / `extract_schema` / `collect` + the clean→validate→dedupe→emit pipeline |

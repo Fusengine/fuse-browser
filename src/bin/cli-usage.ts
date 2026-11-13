@@ -26,6 +26,9 @@ Page commands (one-shot, JSON on stdout):
   screenshot <url>        Capture a PNG (--full-page, --output <file> or base64)
   inspect <url>           Computed style + WCAG contrast for one element (--ref <ref>)
 
+MCP tool surface:
+  tools --tokens          Print the size of the advertised tool definitions (--preset full|docs|qa)
+
 Vault (local encrypted credentials — secrets never touch argv or the LLM):
   vault set <ref>         Store a credential (prompts: username/password/TOTP/origins)
   vault list              List stored refs — metadata only, no secrets

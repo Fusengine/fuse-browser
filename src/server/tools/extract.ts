@@ -6,13 +6,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { detectChallenges } from "../../extraction/challenges.js";
+import { detectSessionBlock } from "../../extraction/challenge-verdict.js";
 import { extractHotelOffers } from "../../extraction/hotel-offers.js";
 import { mainText } from "../../extraction/main-text.js";
 import { extractPrices } from "../../extraction/prices.js";
 import { htmlToMarkdown, renderMarkdown } from "../../extraction/serialize/to-markdown.js";
 import type { SessionManager } from "../../session/manager.js";
-import { jsonResult } from "../result.js";
-import { challengesSchema, hotelOffersSchema } from "./schemas-hotel-challenges-output.js";
+import { BUDGET_INPUT_SHAPE, BUDGET_OUTPUT_SHAPE, budgetResult } from "../output-budget.js";
+import { challengesSchema, hotelOffersSchema, sessionBlockShape } from "./schemas-hotel-challenges-output.js";
 import { priceSchema } from "./schemas-price-output.js";
 import { withSession } from "./with-session.js";
 
@@ -30,6 +31,8 @@ export const EXTRACT_OUTPUT_SHAPE = {
   prices: z.array(priceSchema).optional(),
   hotelOffers: hotelOffersSchema.optional(),
   challenges: challengesSchema.optional(),
+  ...sessionBlockShape,
+  ...BUDGET_OUTPUT_SHAPE,
 };
 
 /** Register `browser_extract`. */
@@ -44,6 +47,7 @@ export function registerExtractTool(server: McpServer, sessions: SessionManager)
         sessionId: z.string(),
         kind: KIND.optional(),
         format: z.enum(["markdown", "text"]).optional(),
+        ...BUDGET_INPUT_SHAPE,
       },
       outputSchema: EXTRACT_OUTPUT_SHAPE,
     },
@@ -66,7 +70,7 @@ export function registerExtractTool(server: McpServer, sessions: SessionManager)
         }
         if (kind === "hotels") out.hotelOffers = extractHotelOffers(text);
         if (kind === "challenges" || kind === "all") out.challenges = await detectChallenges(s.page, text);
-        return jsonResult(out);
+        return budgetResult("browser_extract", { ...out, ...(await detectSessionBlock(s.page)) }, "text", a);
       });
     },
   );

@@ -63,7 +63,7 @@ export async function crawl(seed: string, opts: CrawlOptions = {}): Promise<{ co
         await throttleHost(url, jitterMs(throttleMs));
         const r = await fetchFast(url, opts.proxyUrl);
         const body = await resolveFetchBody(url, r, { browserFallback: opts.browserFallback, proxyUrl: opts.proxyUrl });
-        return { rendered: await renderFetch(body, { format: opts.format, maxChars: opts.maxChars }), html: body.html, url: body.url };
+        return { rendered: await renderFetch(body, { format: opts.format, maxChars: opts.maxChars }), html: body.html, url: body.url, blocked: body.blocked !== undefined };
       } finally {
         opts.onProgress?.(++done, maxPages, url);
       }
@@ -72,7 +72,8 @@ export async function crawl(seed: string, opts: CrawlOptions = {}): Promise<{ co
     for (const o of fetched) {
       if (!o.ok || pages.length >= maxPages) continue;
       pages.push({ ...o.value.rendered, depth });
-      if (depth < maxDepth) {
+      // An interstitial's links are challenge-page chrome, not the site: never follow them.
+      if (depth < maxDepth && !o.value.blocked) {
         for (const link of extractLinks(o.value.html, o.value.url, sameOrigin)) {
           if (!visited.has(link)) {
             visited.add(link);

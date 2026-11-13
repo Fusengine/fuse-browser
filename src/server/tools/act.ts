@@ -7,7 +7,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { type ActionInput, performAction } from "../../actions/perform.js";
+import { sensitivePause, sensitivePressPause } from "../../actions/sensitive-guard.js";
 import type { SessionManager } from "../../session/manager.js";
+import { withEffect } from "../../state/effect.js";
 import { persistStorageState } from "../../session/persist-auth.js";
 import { runWithMemory } from "../../state/action-memory.js";
 import { applyCredential } from "../../vault/fill.js";
@@ -33,8 +35,11 @@ export const actionResultShape = z
   })
   .catchall(z.unknown());
 
-/** Every `actTool` handler returns `{ result, url }` via `jsonResult`. */
-const actOutputShape = { result: actionResultShape, url: z.string() };
+/** Cheap post-action signals: a no-op action shows `domChanged:false, urlChanged:false`. */
+export const effectShape =z.object({ urlChanged: z.boolean(), domChanged: z.boolean(), settleMs: z.number() });
+
+/** Every `actTool` handler returns `{ result, url, effect }` via `jsonResult`. */
+const actOutputShape = { result: actionResultShape, url: z.string(), effect: effectShape };
 
 function actTool(
   server: McpServer,
@@ -53,15 +58,31 @@ function actTool(
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err), "credential_failed");
       }
-      const result = await runWithMemory(s.config.siteMemoryDir, s.page, action, (act) =>
-        performAction(s.page, act, s.config.humanMode),
+      const settle = name !== "browser_scroll" && name !== "browser_wait";
+      const { value: result, effect } = await withEffect(
+        s.page,
+        async () => {
+          const pause =
+            action.type === "click"
+              ? await sensitivePause(s.page, { ...a, kind: "click" })
+              : action.type === "press"
+                ? await sensitivePressPause(s.page, a)
+                : null;
+          return (
+            pause ??
+            (await runWithMemory(s.config.siteMemoryDir, s.page, action, (act) =>
+              performAction(s.page, act, s.config.humanMode),
+            ))
+          );
+        },
+        settle,
       );
       // Persist auth immediately after a successful login so the session is
       // captured at login time, not only on close (cookies + localStorage + IndexedDB).
       if (action.type === "login" && result.ok) {
         await persistStorageState(s.context, s.config.storageStatePath);
       }
-      return jsonResult({ result, url: s.page.url() });
+      return jsonResult({ result, url: s.page.url(), effect });
     });
   });
 }
@@ -70,10 +91,10 @@ function actTool(
 export function registerActTools(server: McpServer, sessions: SessionManager): void {
   const sessionId = z.string();
   const credentialRef = z.string().optional();
-  actTool(server, sessions, "browser_click", "Click a target in the session.", { sessionId, target: z.string() }, (a) => ({ type: "click", target: String(a.target) }));
+  actTool(server, sessions, "browser_click", "Click a target in the session. Every action tool also returns `effect:{urlChanged,domChanged,settleMs}` (cheap signals; `ok` keeps its meaning, so a click that did nothing shows domChanged:false). Opt-in safety: `confirmSensitive:true` (or env FUSE_CONFIRM_SENSITIVE=1) makes a click on a destructive/payment-looking control return `error:\"confirmation_required\"` without clicking; repeat with `confirmed:true` to proceed.", { sessionId, target: z.string(), confirmSensitive: z.boolean().optional(), confirmed: z.boolean().optional() }, (a) => ({ type: "click", target: String(a.target) }));
   actTool(server, sessions, "browser_fill", "Fill a field. Pass `credentialRef` (+ optional `field`: username/password/totp) to fill a vault secret without exposing it.", { sessionId, target: z.string(), value: z.string().optional(), credentialRef, field: z.enum(["username", "password", "totp"]).optional() }, (a) => ({ type: "fill", target: String(a.target), value: a.value ? String(a.value) : "" }));
   actTool(server, sessions, "browser_scroll", "Scroll by a pixel delta (positive deltaY scrolls down). Pass `selector` to scroll a specific scrollable container (auto-detected if omitted with `to`), or `to:\"end\"` to jump to its bottom.", { sessionId, deltaY: z.number().optional(), deltaX: z.number().optional(), selector: z.string().optional(), to: z.enum(["end"]).optional() }, (a) => ({ type: "scroll", deltaY: a.deltaY ?? 600, deltaX: a.deltaX ?? 0, selector: a.selector as string | undefined, to: a.to as string | undefined }));
-  actTool(server, sessions, "browser_press", "Press a key or shortcut (Enter, ArrowDown, Control+a...).", { sessionId, key: z.string() }, (a) => ({ type: "press", key: String(a.key) }));
+  actTool(server, sessions, "browser_press", "Press a key or shortcut (Enter, ArrowDown, Control+a...). Opt-in safety: with `confirmSensitive:true` (or env FUSE_CONFIRM_SENSITIVE=1), Enter/Space on a focused destructive/payment-looking control returns `error:\"confirmation_required\"` without pressing; repeat with `confirmed:true`.", { sessionId, key: z.string(), confirmSensitive: z.boolean().optional(), confirmed: z.boolean().optional() }, (a) => ({ type: "press", key: String(a.key) }));
   actTool(server, sessions, "browser_type", "Type text into whatever element currently has focus — no ref/target (types via the keyboard, not a locator). Use for elements a ref can't reach, e.g. a closed shadow-DOM input: browser_click the field first, then browser_type.", { sessionId, text: z.string() }, (a) => ({ type: "type", text: String(a.text) }));
   actTool(server, sessions, "browser_select", "Select an option in a <select> by value, label or index.", { sessionId, target: z.string(), value: z.string() }, (a) => ({ type: "select", target: String(a.target), value: String(a.value) }));
   actTool(server, sessions, "browser_back", "Navigate back in session history.", { sessionId }, () => ({ type: "back" }));

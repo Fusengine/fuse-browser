@@ -1,6 +1,6 @@
 {
   "name": "@fusengine/browser-mcp",
-  "version": "0.1.64",
+  "version": "0.1.65",
   "description": "MCP server + CLI giving AI agents a real, stealth browser (Patchright/Playwright) — per-country identity, self-healing actions, snapshots, multi-step plans, structured extraction, CDP attach.",
   "license": "MIT",
   "author": "Fusengine",
@@ -55,7 +55,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check src tests",
     "test": "bun test tests/unit",
-    "test:integration": "node --test --import tsx tests/integration/mcp.test.ts tests/integration/probe.test.ts tests/integration/snapshot.test.ts tests/integration/snapshot-prune.test.ts tests/integration/snapshot-frames.test.ts tests/integration/collect.test.ts tests/integration/collect-batch.test.ts tests/integration/selectors.test.ts tests/integration/visual-diff.test.ts tests/integration/session-state.test.ts tests/integration/pipeline.test.ts tests/integration/run.test.ts tests/integration/extract-schema.test.ts tests/integration/recovery.test.ts tests/integration/live-view.test.ts tests/integration/vault.test.ts tests/integration/fetch-extract.test.ts tests/integration/dismiss-overlay-selectors.test.ts",
+    "test:integration": "node --test --import tsx tests/integration/mcp.test.ts tests/integration/probe.test.ts tests/integration/snapshot.test.ts tests/integration/snapshot-prune.test.ts tests/integration/snapshot-frames.test.ts tests/integration/collect.test.ts tests/integration/collect-batch.test.ts tests/integration/selectors.test.ts tests/integration/visual-diff.test.ts tests/integration/session-state.test.ts tests/integration/pipeline.test.ts tests/integration/run.test.ts tests/integration/extract-schema.test.ts tests/integration/recovery.test.ts tests/integration/live-view.test.ts tests/integration/vault.test.ts tests/integration/fetch-extract.test.ts tests/integration/dismiss-overlay-selectors.test.ts tests/integration/safe-actions-refs.test.ts tests/integration/safe-actions-effects.test.ts tests/integration/safe-actions-guard.test.ts tests/integration/safe-actions-find.test.ts",
     "browsers": "patchright install chromium",
     "mcp": "node --import tsx src/bin/mcp.ts",
     "cli": "node --import tsx src/bin/cli.ts"
@@ -74,6 +74,7 @@
     "patchright": "^1.61.1",
     "pixelmatch": "^7.2.0",
     "playwright": "^1.61.1",
+    "unpdf": "^1.9.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

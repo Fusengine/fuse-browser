@@ -1,6 +1,6 @@
 # MCP tools
 
-Complete reference for the 51 `browser_*` tools exposed by the fuse-browser MCP server.
+Complete reference for the 54 `browser_*` tools exposed by the fuse-browser MCP server.
 
 Tools fall into two families:
 
@@ -18,12 +18,12 @@ Every tool declares an `outputSchema` (zod) and returns a **typed `structuredCon
 
 ## Capability groups (`FUSE_CAPS`)
 
-By default all 51 tools are registered. Set the `FUSE_CAPS` env var (comma-separated group names) to expose fewer tools — a lighter context for the LLM client:
+By default all 54 tools are registered. Set the `FUSE_CAPS` env var (comma-separated group names) to expose fewer tools — a lighter context for the LLM client:
 
 | Group | Tools |
 | --- | --- |
-| `core` | Session lifecycle (`browser_open`/`browser_status`/`browser_close`/`browser_connect`), navigation (`browser_navigate`/`browser_back`/`browser_forward`), actions (`browser_click`/`browser_fill`/`browser_login`/`browser_scroll`/`browser_press`/`browser_type`/`browser_select`), `browser_tabs`, `browser_dialog`/`browser_downloads`, `browser_snapshot`/`browser_act`, `browser_wait`/`browser_wait_for`, `browser_screenshot`, `browser_autoscroll`, `browser_vault`. |
-| `batch` | `browser_probe`, `browser_probe_html`, `browser_fetch`, `browser_fetch_batch`, `browser_crawl`, `browser_collect_batch`, `browser_shots_batch`, `browser_site_shots`, `browser_serp_batch`. |
+| `core` | Session lifecycle (`browser_open`/`browser_status`/`browser_close`/`browser_connect`), navigation (`browser_navigate`/`browser_back`/`browser_forward`), actions (`browser_click`/`browser_fill`/`browser_login`/`browser_scroll`/`browser_press`/`browser_type`/`browser_select`), `browser_tabs`, `browser_dialog`/`browser_downloads`, `browser_snapshot`/`browser_find`/`browser_verify`/`browser_act`, `browser_wait`/`browser_wait_for`, `browser_screenshot`, `browser_autoscroll`, `browser_vault`. |
+| `batch` | `browser_probe`, `browser_probe_html`, `browser_fetch`, `browser_fetch_batch`, `browser_crawl`, `browser_map`, `browser_collect_batch`, `browser_shots_batch`, `browser_site_shots`, `browser_serp_batch`. |
 | `extract` | `browser_collect`, `browser_run`, `browser_extract`, `browser_extract_schema`, `browser_products`. |
 | `debug` | `browser_inspect`, `browser_console`, `browser_network`, `browser_visual_diff`, `browser_metrics`, `browser_pdf`, `browser_cookies`. |
 | `live` | `browser_handoff`, `browser_live_view`, `browser_live_view_stop`. |
@@ -33,6 +33,45 @@ FUSE_CAPS=core,extract browser-mcp   # only the core + extract groups
 ```
 
 Parsing is forgiving: names are case-insensitive and whitespace-tolerant (`"  CORE , Extract "` works), unknown names are reported on stderr and ignored, and a blank/unset value — or one containing **only** unknown names — falls back to all groups (never an empty server).
+
+### Task presets (`FUSE_PRESET` / `--preset`)
+
+A preset is a named set of groups and tools, for one kind of task. It only narrows what is registered: no tool is renamed or changed, and the default is `full` (every tool). Select it with the `FUSE_PRESET` env var or `browser-mcp --preset <name>` (the flag wins). `FUSE_CAPS` still applies on top: a tool is registered only when both allow it. If the two select no group in common (e.g. `FUSE_PRESET=docs FUSE_CAPS=core`), `FUSE_CAPS` is ignored with a stderr notice, so the server is never empty.
+
+| Preset | Tools | For |
+| --- | --- | --- |
+| `full` | all 54 | default |
+| `docs` | `browser_fetch`, `browser_fetch_batch`, `browser_crawl`, `browser_map`, `browser_serp_batch` | reading documentation (HTTP fast-path + search); no browser session |
+| `qa` | 22: `browser_open`/`status`/`close`, `browser_navigate`/`back`/`forward`, `browser_click`/`fill`/`scroll`/`press`/`type`/`select`/`wait`/`wait_for`, `browser_act`, `browser_snapshot`, `browser_find`, `browser_verify`, `browser_screenshot`, `browser_console`, `browser_network`, `browser_visual_diff` | testing a running webapp |
+
+```sh
+FUSE_PRESET=docs browser-mcp            # or: browser-mcp --preset docs
+fuse-browser tools --tokens --preset qa # advertised definition size of that preset
+```
+
+Advertised definition size, measured on 2026-11-12, 54 tools (name + description + `inputSchema` + `outputSchema`, compact JSON; tokens are an **estimate**, `ceil(bytes / 4)`, no tokenizer):
+
+| Surface | Tools | Bytes | ~Tokens |
+| --- | --- | --- | --- |
+| `full` | 54 | 116,675 | 29,169 |
+| `qa` | 22 | 42,180 | 10,545 |
+| `docs` | 5 | 19,978 | 4,995 |
+
+The numbers move whenever a tool's description or schema changes; `fuse-browser tools --tokens` prints the current ones (per tool, per group, total).
+
+### Output budget (`maxTokens`, `offset`, `outputMode`)
+
+The big-output tools (target: `browser_fetch`, `browser_fetch_batch`, `browser_crawl`, `browser_extract`, `browser_snapshot`) take three optional params, all off by default (without them the result is byte-identical to before):
+
+- `maxTokens` caps the one big field (e.g. `text`, a list of `elements`/`pages`) to about that many tokens. The estimate is the one `fuse-browser tools --tokens` uses (`ceil(UTF-8 bytes / 4)`, no tokenizer), so a text field is cut to at most `maxTokens * 4` bytes, at a paragraph, line or word boundary (a list keeps whole items within that size, except that one item is always returned so paging makes progress). A cut result carries `nextOffset` (present only when the field was cut; the budget never writes `truncated`, which stays each tool's own flag, e.g. the snapshot element cap); call again with `offset: nextOffset` to continue. The pages concatenate back to the full text. `approxTokens` reports the size of the returned result.
+- `offset` is the resume position (characters for text, items for a list).
+- `outputMode: "file"` writes the full field under the output dir (`<outputDir>/offload/<tool>-<hash>.txt|json`, a server-chosen path, never a caller path) and returns `{ outputMode: "file", path, bytes, preview }`; the field itself is replaced by the 400-character `preview` (an empty list). `maxTokens` and `offset` are ignored in this mode. When `FUSE_CONFINE_WRITES` is set and the output dir is outside that root, nothing is written and the result stays inline with `outputError: "path_outside_confinement"` (`"write_failed"` if the write itself fails). If the big field is absent or is neither text nor a list, nothing is written and the result carries `outputError: "field_not_offloadable"`; without `outputMode:"file"` such a result is returned unchanged.
+
+A tool accepts these params only once it is wired to the shared helper (`budgetResult`, `src/server/output-budget.ts`); the tool's own parameter list is authoritative.
+
+### Tool annotations
+
+Every tool is advertised with MCP `annotations` from one central table (`src/server/tool-annotations.ts`), so hosts can tell observation from action: `readOnlyHint` (true for fetch, extract, snapshot, console, network, ...; false for click, fill, act, run, navigate, and for every tool that can write a file: screenshot, probe, shots, site_shots, serp_batch, pdf, visual_diff, ...), plus `destructiveHint`, `idempotentHint` and `openWorldHint` where they differ from the MCP defaults (destructive `true`, idempotent `false`, open-world `true`; destructive and idempotent are only meaningful for non-read-only tools). `readOnlyHint:true` means no write side effect on any input (page, remote site or disk), so a client that auto-approves read-only tools never writes a file unasked. Annotations are **hints**: the MCP spec tells clients not to base trust decisions on them. They add about 3.4 KB (~850 estimated tokens) to the full `tools/list`.
 
 **Progress notifications.** The batch tools (`browser_fetch_batch`, `browser_crawl`, `browser_collect_batch`, `browser_shots_batch`, `browser_site_shots`, `browser_serp_batch`) emit MCP `notifications/progress` (`progress`/`total` per finished item, with the item URL/query as `message`) when the client sends a `progressToken` with the request. Clients that don't request progress see no change.
 
@@ -96,6 +135,14 @@ HTTP fetch with browser TLS/HTTP2 impersonation — no browser launch, ~10x fast
 
 With `browserFallback: true`, escalation to a real browser render fires on **either** of two independent signals: (1) the raw HTML itself looks like an unrendered SPA shell (thin visible text + SPA/script markers), or (2) the raw HTML looks JS-rendered (SPA hydration mount point or heavy `<script>` count) **and** the fast-path extraction still came back empty/near-empty (`wordCount < 15`, not already recovered by the hollow-extraction path) — this covers chrome-heavy pages (nav/footer markup clearing 600+ visible chars) whose real content only exists after client-side hydration. Either path sets `escalated: true` and re-renders from the browser's rendered HTML; a body that already escalated is never escalated twice. If the content extractor still finds nothing on the real browser-rendered HTML (rare — a dense, non-article layout like an e-commerce grid homepage can defeat its content-scoring even post-render), the browser's own raw visible text is shipped instead of near-empty markdown, with `extraction: "recovered"` and a real `wordCount` — no extra browser launch.
 
+**Blocked responses.** A response that is an anti-bot interstitial (a Cloudflare / DataDome / AWS WAF challenge page) is not the page, and is never returned as if it were. The result then carries `blocked: true`, `blockedBy` (vendor slug: `cloudflare`, `datadome`, `aws-waf`, or `unknown` when only vendor-agnostic signals matched) and a one-line `hint` naming the next tools. Detection is table-driven (`src/net/block-signals.ts`) and combines signals rather than trusting one string: a vendor-documented response header (`cf-mitigated: challenge`, `x-amzn-waf-action: challenge|captcha`) decides at any status; a challenge-specific HTML marker decides on a non-2xx status or thin visible text — the marker must be in executable/loading context (Cloudflare's inline `_cf_chl_opt = {` assignment, a `src="…captcha-delivery.com…"` DataDome script/frame), so a page that merely names them in prose or in a CSP meta is not matched; weaker page-level hints (interstitial title, "enable JavaScript to continue" / "verify you are human" text, `<meta http-equiv="refresh">`) only count when **three** distinct ones match together on a thin 4xx/5xx page — any two are common on legitimate error pages, and one phrase never counts twice. The `x-datadome` header is on every response of a DataDome-protected site, so it never counts toward the three (it only attributes `blockedBy: "datadome"` once the page-level hints decide). HTML-based detection is skipped for bodies over 1 MiB (header rule only). Normal results are unchanged — the three fields are absent unless `blocked`. The sparse-page shapes covered by the test matrix (a 404, a login page, a real 403 with text, a bare 403, a 503 maintenance page — also behind a DataDome-protected site or with a refresh tag —, a 429, an SPA shell, a 401 "Security Check" form) are not flagged. Known coverage gap: vendors without an entry in the signal table (e.g. a PerimeterX or Akamai "Access Denied" page) are only caught if they also match three weak hints, so they can still come back as an ordinary-looking result — adding one is a single table entry. Known limit: a long 4xx page that reproduces a vendor's own snippet verbatim anywhere in its markup (e.g. a tutorial quoting the full `window._cf_chl_opt = {…}` assignment) would still match the HTML marker on a non-2xx status.
+
+Escalation is **opt-in**: `browserFallback: true` re-renders a detected block in a real browser (`escalated: true`); if that render still carries the challenge's own HTML marker on thin text, the result still says `blocked: true` and the `hint` then points at a headed session and `browser_handoff`. A rendered page has no headers or status, so a block that only response headers can identify (a vendor with no HTML marker in the table, today AWS WAF) is carried over to a render that is as thin as an interstitial; a Cloudflare/DataDome block is not carried over — a short legitimate page rendered fine is returned as the page, and a still-challenged render is caught by its own marker. A header-only block whose render is long enough to look like a page is not re-flagged. Known limit: the converse also holds — a GENUINE short page behind a header-identified block (e.g. AWS WAF), rendered successfully but thin (under 600 visible characters), is still reported `blocked: true`, because a render carries no headers to tell it from the interstitial. Set `FUSE_FETCH_ESCALATE_BLOCKED=1` on the server to escalate detected blocks even without `browserFallback` (it does not turn on SPA-shell escalation). With `escalated: true`, `status` is still the fast-path HTTP status. The agent never solves a CAPTCHA: a human step on the live page goes through `browser_handoff`.
+
+**PDFs.** A response that is a PDF (`application/pdf`, or the `%PDF-` signature under a generic content-type) is read, not returned as bytes: `text` is the text layer with a `<!-- page N -->` marker before each page, and `pageCount` is the page count of the whole document (`maxChars` still truncates `text`). Parsing uses `unpdf` (pdf.js, pure JS) in a worker thread bounded in time (20 s, `pdfError: "timeout"`) and memory (`pdfError: "memory"`), so a small file that inflates to hundreds of MB cannot pin or exhaust the server. The memory cap is `FUSE_PDF_MAX_MB` (default `256`; a positive number, anything else falls back to the default): it is the worker's V8 heap limit (`resourceLimits.maxOldGenerationSizeMb` — honoured by Node, **ignored by Bun**) and, portably on both runtimes, a ceiling on how far the process RSS may grow while the worker runs (RSS is process-wide, so other non-PDF work running at the same time can count against it; raise the value on a busy server). PDF extractions run one at a time process-wide, so several PDFs in one `browser_fetch_batch` never charge each other's memory (the batch's other URLs are unaffected). Measured: the real 15-page arXiv paper peaks at about 100 MB RSS (Node 26 and Bun 1.4.4; its heap stays under 64 MB), a 150 MB-inflating bomb PDF is cut off at 410 MB (Node, 128 MB cap) / when RSS has grown past the cap (Bun). A PDF over the 10 MB download cap is refused (`pdfError: "too_large"`, empty `text`), a corrupt or encrypted one gives `pdfError: "unreadable"`; a scanned PDF has no text layer and returns an empty `text` (no OCR). The same applies in `browser_fetch_batch` and `browser_crawl`; a PDF is a leaf in a crawl (no links are followed out of it).
+
+**Site-authored markdown.** When the site publishes markdown for the page, that markdown is returned as-is (`format: "text"`, `source: "site-markdown"`): (1) the server answers markdown to our `Accept: text/markdown`; (2) the page advertises a twin with `Link: <…>; rel="alternate"; type="text/markdown"`; (3) with `preferMarkdown: true`, the `<path>.md` twin of the URL (a docs page `/docs/intro` → `/docs/intro.md`; the site root has none). At most one extra request per call, same origin only, only on a 2xx page, through the same SSRF guard as the main fetch; a twin that is HTML (a SPA catch-all), non-200 or empty is ignored. With `preferMarkdown` and no markdown found the result says `source: "html"`. Without any site markdown the result is unchanged (no `source` field). `browser_crawl` does not use this ladder (it needs the HTML to find links).
+
 The markdown path auto-detects a **hollow extraction** — when the content extractor silently captures only a sliver of the page's real non-link prose (e.g. some forum threads whose posts sit inside a wrapper element the extractor drops as boilerplate) — and recovers the raw page text instead, gated so a genuinely sparse or link-heavy page (listing/index, login, 404) never gets dumped as raw link soup: recovery only fires when the page holds a substantial amount of reading content outside its `<a>` chrome that the extractor missed. The result carries `wordCount` and `extraction` (`"primary"` | `"recovered"`) so callers can see which path produced `text`. Pass `contentSelector` to pin the main content container yourself when auto-detection still picks the wrong element.
 
 | Param | Type | Required | Description |
@@ -109,13 +156,18 @@ The markdown path auto-detects a **hollow extraction** — when the content extr
 | `countryCode` | string | no | Default region for phone E.164 parsing (default `CH`). |
 | `proxyUrl` | string | no | Proxy to route the request through. |
 | `maxChars` | integer | no | Truncate returned `text` (default `20000`). |
-| `browserFallback` | boolean | no | When the HTTP response is an empty SPA/CSR shell, re-render it in a real browser and return the rendered markdown. Off by default. The response sets `escalated: true` when this happens. |
+| `browserFallback` | boolean | no | When the HTTP response is an empty SPA/CSR shell or a detected anti-bot interstitial, re-render it in a real browser and return the rendered markdown. Off by default. The response sets `escalated: true` when this happens (and `blocked: true` if the browser render is blocked too). |
+| `preferMarkdown` | boolean | no | Also try the `<url>.md` twin of a docs page and use the site's own markdown (`source: "site-markdown"`; `"html"` when none). Off by default. |
+| `focus` | string | no | A question or keywords: adds `passages` — the best-matching sections of the **whole** page (see below). Off by default; blank = off. |
+| `topK` | integer (> 0) | no | Passages returned for `focus` (default `3`). |
+
+**Passages (`focus`).** The extracted markdown (plain text for non-HTML bodies) is split at headings into passages (long sections are grouped by paragraph, ≈ 900 characters each) and ranked with BM25 against `focus` — lexical, deterministic, no model: lowercased Unicode word tokens, no stemming, a passage's heading counts toward its score. `passages: [{ heading, text, score }]`, best first, only passages that contain at least one query term, so a query that matches nothing gives `[]`. Ranking runs on the full page, not on the `maxChars` slice; `text` itself is unchanged, so pair `focus` with a small `maxChars` to read only the passages. Without `focus` the result is byte-identical to before.
 
 ```json
 { "url": "https://example.com", "extractContacts": true }
 ```
 
-Returns `{ status, url, format, escalated, text, wordCount?, extraction? }` — `wordCount`/`extraction` are set on the markdown path only.
+Returns `{ status, url, format, escalated, text, wordCount?, extraction?, blocked?, blockedBy?, hint?, pageCount?, pdfError?, source?, passages? }` — `wordCount`/`extraction` are set on the markdown path only; `blocked` (always `true`), `blockedBy` and `hint` are set only when the response is an anti-bot interstitial (see above); `pageCount`/`pdfError` only for a PDF; `source` only when site markdown was used or `preferMarkdown` was set.
 
 ---
 
@@ -129,6 +181,7 @@ Fetch **many URLs in parallel** via the HTTP fast-path (TLS impersonation, no br
 | `format` | enum `markdown` \| `text` | no | Output format (default `markdown`; forced to `text` for non-HTML). |
 | `maxChars` | integer | no | Truncate each returned `text` (default `20000`). |
 | `browserFallback` | boolean | no | Re-render empty SPA/CSR shells in a real browser (per URL). |
+| `preferMarkdown` | boolean | no | Per URL, also try the `.md` twin and use the site's own markdown (see `browser_fetch`). |
 | `proxyUrl` | string | no | Proxy to route the requests through. |
 | `concurrency` | integer | no | Max parallel fetches (default `8`). |
 
@@ -136,7 +189,7 @@ Fetch **many URLs in parallel** via the HTTP fast-path (TLS impersonation, no br
 { "urls": ["https://a.example", "https://b.example"], "concurrency": 5 }
 ```
 
-Returns `{ count, results: [{ status, url, format, escalated, text } | { url, error }] }`.
+Returns `{ count, results: [{ status, url, format, escalated, text, blocked?, blockedBy?, hint?, pageCount?, pdfError?, source? } | { url, error }] }` (`pageCount`/`pdfError`: PDFs are read as page-marked text; `source`: site markdown — see `browser_fetch`). Each URL is checked for an anti-bot interstitial exactly like `browser_fetch`; a blocked URL carries `blocked: true`, `blockedBy` and `hint` (it is not turned into an `error`, and `browserFallback` / `FUSE_FETCH_ESCALATE_BLOCKED=1` apply per URL — mind the cost: one browser render per blocked URL, up to `concurrency` at once).
 
 ---
 
@@ -162,7 +215,28 @@ Crawl a site from a seed URL via the HTTP fast-path (no browser launch): breadth
 { "url": "https://docs.example.com", "maxPages": 30, "maxDepth": 2 }
 ```
 
-Returns `{ count, pages: [{ status, url, format, escalated, text, depth }] }`.
+Returns `{ count, pages: [{ status, url, format, escalated, text, depth, blocked?, blockedBy?, hint?, pageCount?, pdfError? }] }`. A PDF page is read as page-marked text (`pageCount`) and is a leaf: no links are followed out of it. A page answered by an anti-bot interstitial carries `blocked: true`, `blockedBy` and `hint` (same detection as `browser_fetch`) and its links are **not followed** — they would be challenge-page chrome, not the site. `browserFallback` / `FUSE_FETCH_ESCALATE_BLOCKED=1` escalate such a page to a browser render per page. `browser_serp_batch` is unaffected: it drives a real browser session and never goes through the HTTP fast-path.
+
+---
+
+### browser_map
+
+List a site's URLs **without crawling it** — HTTP fast-path, no browser launch, read-only. Sources, in order: the `Sitemap:` lines of `/robots.txt` (else `/sitemap.xml`), following sitemap indexes and `.gz` sitemaps; if the site has no sitemap at all, the links of `/llms.txt`. Only files on the seed's origin are fetched (an index child or a `Sitemap:` line on another origin is ignored, and so is a sitemap that redirects to another origin); at most 50 sitemap files are **attempted** per call (a dead child counts), and every request goes through the same network guard as `browser_fetch` (`FUSE_BLOCK_PRIVATE_NETS=1` makes it refuse loopback/private targets with `blocked_private_network`). With `respectRobots` (default) robots.txt gates every file `browser_map` picks ITSELF (`/sitemap.xml`, `<path>/sitemap.xml`, `/llms.txt`, `<path>/llms.txt`): it is not even requested when robots disallows its path, and each skip is counted in `skippedByRobots` (absent when 0). The exception is what the site advertises: sitemaps named in its robots `Sitemap:` lines, and the child sitemaps listed by an index `browser_map` was allowed to read, are always fetched — so an advertised index can lead to a child under a `Disallow` path. The page URLs listed in a sitemap or `llms.txt` are filtered by robots (disallowed ones are left out, and a URL whose percent-escapes cannot be decoded is dropped too — fail closed). `respectRobots:false` lifts all of this. Per [sitemaps.org](https://www.sitemaps.org/protocol.html#location) every URL of a sitemap must use the sitemap's own protocol, host and port, so listed URLs on any other origin (another host, `http` vs `https`, another port, or a link in `llms.txt` pointing elsewhere) are dropped and counted in `offOrigin` (absent when 0) — map the other origin separately if you want it. Parsing is linear in the size of the input (no regex backtracking on hostile XML or glob patterns).
+
+| Param | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes | Any http(s) URL of the site; its origin is mapped. |
+| `includePaths` | string[] | no | Keep only URLs whose path matches (`*` = any characters; a pattern without `*` also matches everything below it: `/docs` matches `/docs` and `/docs/a`). |
+| `excludePaths` | string[] | no | Drop URLs whose path matches (same syntax). |
+| `limit` | integer | no | Max URLs returned (default `1000`). |
+| `respectRobots` | boolean | no | Drop robots-disallowed URLs (default `true`). |
+| `proxyUrl` | string | no | Proxy to route requests through. |
+
+```json
+{ "url": "https://docs.example.com", "includePaths": ["/docs/*"], "limit": 200 }
+```
+
+Returns `{ source: "sitemap" \| "llms-txt", count, urls: [{ url, lastmod? }], truncated?, offOrigin?, skippedByRobots?, warning?, tried? }`. `truncated: true` appears only when the list is incomplete: more URLs matched than `limit`, or the 50-file budget ended the walk of a large sitemap index. An empty list is never silent: with `count: 0` the result also carries `warning` (`no_sitemap_found` — nothing usable at any tried URL; `all_filtered` — entries existed but `includePaths`/`excludePaths`/robots removed them all; `budget_exhausted` — the 50-file budget ended the walk first; `blocked_by_robots` — the candidate files were not fetched because robots.txt disallows them) and `tried` (every URL actually requested, in order); it is not an error. A site published under a sub-path of a shared host (e.g. `https://user.github.io/project/`) is found because, when the origin root has nothing, the URL's own path is tried too: `<path>/sitemap.xml`, then `<path>/llms.txt` (at most those 2 extra requests; robots and network-guard rules unchanged).
 
 ---
 
@@ -386,6 +460,8 @@ When `read` is given, the result also includes `content: { filename, encoding, d
 
 Navigate a live session to a URL; returns the resulting `{ url, title }`.
 
+When the live page is an anti-bot interstitial the result also carries `blocked: true`, `blockedBy` (`cloudflare` \| `datadome` \| `aws-waf` \| `unknown`) and a `hint` with the next tools (wait and call `browser_extract` again, retry from a headed `browser_open`, `browser_handoff` when the page shows a CAPTCHA/Turnstile step; never a solver). Same fields on `browser_extract`. Normal pages return exactly the fields above, nothing added. Detection is the `browser_fetch` table detector on the rendered HTML plus the challenge evidence of `browser_extract kind:"challenges"`: a Cloudflare challenge marker, a Cloudflare 1xxx block page, an AWS WAF interstitial, or — on a page with under 600 characters of text — a DataDome challenge or a bare CAPTCHA/Turnstile widget element or iframe with no fillable field (`unknown`). A login or contact form with a widget, a page that only loads a captcha `<script>`, a long page, or an article that names Cloudflare is not reported. Akamai/PerimeterX "Access Denied" pages are not detected on session routes (a rendered page has no HTTP status, which the weak-signal rule needs).
+
 | Param | Type | Required | Description |
 | --- | --- | --- | --- |
 | `sessionId` | string | yes | Target session. |
@@ -458,12 +534,16 @@ Wait until a semantic condition holds: text appears, selector visible, selector 
 
 ### browser_click
 
-Click a target in the session.
+Click a target in the session. Like every session action tool (`browser_click`/`fill`/`scroll`/`press`/`type`/`select`/`back`/`forward`/`wait`/`login`) the result also carries `effect: { urlChanged, domChanged, settleMs }` — cheap signals (URL compared, DOM signature compared, one 150 ms re-read when nothing changed yet), so a click that did nothing is visible as `domChanged:false`. `ok` keeps its meaning.
 
 | Param | Type | Required | Description |
 | --- | --- | --- | --- |
 | `sessionId` | string | yes | Target session. |
 | `target` | string | yes | Selector or text of the element to click. |
+| `confirmSensitive` | boolean | no | Opt-in (default off; env `FUSE_CONFIRM_SENSITIVE=1` enables it globally): a click whose live element name matches the destructive/payment vocabulary (`src/actions/sensitive-vocab.ts`) returns `error:"confirmation_required"` + `element` without clicking. |
+| `confirmed` | boolean | no | Repeat the call with `true` to proceed after a `confirmation_required`. |
+
+`effect.settleMs` is 150 when nothing changed immediately (one extra DOM re-read) and 0 for `browser_scroll` and `browser_wait`, which skip it. Measured on a 9,000-node page: DOM signature 3-4 ms, a no-op click with effect about 205-240 ms in total, a scroll 7-8 ms. `browser_run` steps do not carry `effect`. `browser_press` takes the same `confirmSensitive`/`confirmed`: Enter/Space on a focused destructive/payment-looking control is paused. Vocabulary (`src/actions/sensitive-vocab.ts`): "Unsubscribe"/"Se désabonner", delete/supprimer, deactivate, cancel subscription, pay/buy/checkout/payer/acheter...; "Remove"/"Erase"/"Effacer" count only with an object (account, card, all, everything, data, history); a plain "Subscribe" is not a payment.
 
 ```json
 { "sessionId": "s_abc123", "target": "Sign in" }
@@ -567,12 +647,17 @@ Select an option in a `<select>` by value, label, or index.
 
 Return the indexed interactive elements of the live page, each with a `ref` to use with `browser_act`. Pierces open Shadow DOM and iframes (same- and cross-origin); sub-frame refs look like `"3:4"`.
 
+Refs are stamped once per element and never renumbered: inserting an element before another does not move its ref. A node cloned from a stamped one (`cloneNode`) copies the stamp but not the in-page record of who received it, so a walk gives the clone a fresh id and an action on the old ref never lands on a clone (`ambiguous_ref` / `not_original` / `element_gone`). Refs are unique across the tabs of a session: each tab gets a 10,000,000-wide slot in the order of its first snapshot (the first tab numbers from 0), never reused after a tab is closed (still plain numbers, same `"3:4"` frame form), so a ref from another tab is refused. Past the end of a tab's slot nothing more is stamped and the snapshot reports `truncated`. The server remembers what each ref was (tag, role, id, name, type, href, text, frame); `browser_act`, `browser_inspect` and `browser_screenshot` with a `ref` refuse with `error:"ref_stale"` (plus `reason`, `expected`, `found`, `generation`, `hint:"call browser_snapshot again"`) when the node is gone, was replaced, or now shows other content — they never act on another element. Each snapshot returns a `generation` (new on every `browser_snapshot`, `annotate`, or `browser_act annotate:true`); only the latest snapshot's refs (plus elements added by an action, from its `diff.added`) are accepted. A label that changes on the same node ("Follow" to "Following", "Cart (1)" to "Cart (2)") is accepted: the action proceeds and `result.refNote:{nameChanged:{from,to}}` says so; a label change together with any other identity change (tag, role, id, name, type, href, frame, document) is still refused. A page (tab, or a page recovered after a crash) with no `browser_snapshot` of its own accepts no ref: the call is refused with `ref_stale` and `reason:"no_snapshot"`.
+
+The output also carries `truncated` and `dropped`: the caps (200 elements per frame, 400 in total) are no longer silent; when a cap hides matches, `truncated:true`, `dropped` is the number of matches not returned (an upper bound: it may include elements `prune` would have removed) and `hint` says what to do.
+
 | Param | Type | Required | Description |
 | --- | --- | --- | --- |
 | `sessionId` | string | yes | Target session. |
 | `selectors` | boolean | no | Also return a durable CSS `selector` per element (cacheable to act later without re-snapshotting). |
 | `prune` | boolean | no | Drop only genuinely hidden or decorative elements (default `false`, output unchanged). When `true`, prunes an element iff it is **CSS-hidden** — `display:none`/`visibility:hidden`/`collapse`/`content-visibility` on itself or an ancestor, via `Element.checkVisibility()` — **or decorative**: under an `aria-hidden="true"` ancestor **and** not focusable. A **visible, focusable** element is **kept even under an `aria-hidden` ancestor**, so the controls of an **open modal** (whose SPA focus-trap marks a root/sibling wrapper `aria-hidden`) stay in the snapshot. Never prunes on off-screen, `opacity:0`, or off-viewport position. |
 | `annotate` | boolean | no | Also return a Set-of-Marks JPEG: numbered badges (= each `ref`) drawn over the page, for vision models (main-frame, viewport-only). |
+| `within` | string | no | Scope to a subtree: a `ref` or a CSS selector (see below). |
 
 ```json
 { "sessionId": "s_abc123", "annotate": true }
@@ -582,9 +667,60 @@ Return the indexed interactive elements of the live page, each with a `ref` to u
 { "sessionId": "s_abc123", "prune": true }
 ```
 
+`within` scopes the snapshot to a subtree: a snapshot `ref` (that element and its descendants) or a CSS selector (every match, in every frame). Output gains `scope:{matched, error?}` (`matched:0` = nothing matched; `error:"invalid_selector"`). Refs keep their stamps and are guarded exactly like full-snapshot refs; a scoped snapshot starts a new `generation` but keeps every ref already accepted (it adds, never drops). A `within` ref that is no longer the element you saw returns no elements with `scope.error:"ref_stale"`. Limits: a CSS `within` does not enter shadow roots (use a host selector or a ref), and `within` set to an `<iframe>` element does not include the frame's content (snapshot the frame's controls with a selector valid inside it). Absent = the whole page, output unchanged (no `scope` key).
+
+```json
+{ "sessionId": "s_abc123", "within": "form#checkout" }
+```
+
+### browser_find
+
+Find interactive elements by accessible name, role or text and get their `ref`s without a full `browser_snapshot`. Every word of `query` must match (case-insensitive) in the element's text, name, placeholder, role, tag, id, value or type; exact and prefix name matches rank first, then DOM order. The refs are registered like snapshot refs: actionable with `browser_act`, refused with `ref_stale` if the element changed.
+
+| Param | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sessionId` | string | yes | Target session. |
+| `query` | string | yes | Words to look for. |
+| `limit` | integer | no | Matches returned (default 10, max 50). |
+
+Output: `{ url, query, generation, total, count, matches[], truncated, dropped, hint? }` — `total` is the number of matches, `matches` the best `limit` (same element shape as `browser_snapshot`). The search covers the same capture as `browser_snapshot`, including its caps (200 per frame, 400 total): when `truncated:true` a miss does not prove absence (scroll, or use `browser_snapshot` `within`). The text searched is the element's visible text, else its `aria-label`/placeholder (so an icon button showing "×" labelled "Close" is not found by "close"), cut at 120 characters. `generation` moves when a frame's document changed since the last snapshot/find (ref numbers restart per document).
+
+```json
+{ "sessionId": "s_abc123", "query": "sign in", "limit": 3 }
+```
+
+### browser_verify
+
+Check that a page meets YOUR expectations and get a receipt, in one call. Deterministic: no model decides anything, every verdict comes from an expectation you wrote. Give `url` (loads it; without `sessionId` a temporary session is opened with the usual browser options and closed afterwards) and/or `sessionId` (verifies the session's current page, or loads `url` in it first).
+
+| Param | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | one of | Page to load. |
+| `sessionId` | string | one of | Existing session. |
+| `expect` | array | yes | Expectations (at least one; an empty list is rejected). Each is exactly one of `{ "text": "..." }` (the visible body text contains it, case-sensitive), `{ "visible": "css selector" }` (first match is visible), `{ "noConsoleErrors": true }`, `{ "noFailedRequests": true }` (no response with status >= 400 since the verification started). |
+| `baseline` | string | no | A previous `after.png` or `receipt.md`: `evidence.diff` reports the pixel change. Informational, it never fails the verification; a baseline that cannot be found is a failed expectation (`baseline_not_found`). |
+| `evidenceDir` | string | no | Where the evidence goes (default `<outputDir>/verify/verify-<time>-<session>/`). Confined like screenshot paths: with `FUSE_CONFINE_WRITES` set, a directory outside the root is refused (`path_outside_confinement`) and nothing is written. |
+| `fullPage` | boolean | no | Full-page after screenshot. |
+| (browser options) | | no | `engine`, `headless`, `outputDir`... as in `browser_open`, used when `url` is given without `sessionId`. |
+
+Output: `{ pass, url, title, failed[], consoleAvailable, evidence, blocked?, blockedBy?, hint? }`.
+- `failed[]` = `{ expect, reason, detail? }`. Reasons: `text_not_found`, `not_visible`, `selector_not_found`, `invalid_selector`, `failed_requests` (`detail`: the URLs with status or network error), `console_errors` (`detail`: the messages), `page_errors` (uncaught exceptions, `detail`: the messages), `console_unavailable_on_patchright`, `baseline_not_found`, `blocked:<vendor>`. Empty `text`/`visible` strings are rejected at input.
+- `pass` is true only if nothing failed AND the page is not an anti-bot interstitial that the session detector recognises (Cloudflare, DataDome, AWS WAF, a bare captcha/Turnstile widget): then it fails with `blocked:<vendor>` plus the session `blocked`/`blockedBy`/`hint` fields, whatever the other expectations say. Limits: other walls (Akamai, PerimeterX...) are not detected on session routes, a detector error means "no verdict", and the HTTP status of the main document is not checked (a 500 page that contains your text passes).
+- Console: capture is disabled upstream on the default `patchright` engine, and so are uncaught-exception events (measured). A clean `noConsoleErrors` there fails with `console_unavailable_on_patchright` and `consoleAvailable:false` rather than passing silently. Use `engine:"playwright"` to check the console and uncaught exceptions (`page_errors`).
+- Failures: with `url`, every failed request during the load is recorded individually (a 500 followed by a 200 on the same URL still fails; not subject to the session log cap): HTTP >= 400 and network errors (cancelled requests excluded). Without `url`, only the session's own buffers are checked (last 250 requests, no exceptions); that buffer never records network failures, so, failing closed, a request with no matching response counts as failed (`error:"no_response"`): a still-pending long-poll request can therefore fail the check.
+- Window: with `url`, only what happens from the load on counts; entries from earlier calls do not leak in.
+- A `receipt.md` baseline must name an `after.png` (as the receipts written by this tool do); anything else is `baseline_not_found`.
+- Confinement covers the evidence directory including the default `<outputDir>/verify/`. In `url`-only mode the temporary session's config may create `<outputDir>/site-memory` before the check (unavoidable: it is created when the config is resolved).
+- `evidence` = `{ before?, after, diff?, consoleLog, networkLog, receiptMd }`: file paths for `after.png`, `console.json`, `network.json`, `receipt.md` (a short Markdown table of expectations and evidence paths), plus `before` (the baseline PNG used) and `diff` (`{image?, diffPixels, diffRatio, regions, changed, error?}`; `diff.png` is written when the sizes match, `error:"dimension_mismatch"` counts as changed).
+- Not included: video/screencast, tracing, accessibility audit.
+
+```json
+{ "url": "https://example.org", "expect": [{ "text": "Example Domain" }, { "visible": "h1" }, { "noFailedRequests": true }] }
+```
+
 ### browser_act
 
-Execute click/fill/select/pick/upload/hover/drag on an element by `ref` (from `browser_snapshot`) or by `target` text. Returns a diff of what changed on the page (added/removed/text/url).
+Execute click/fill/select/pick/upload/hover/drag on an element by `ref` (from `browser_snapshot`) or by `target` text. Returns a diff of what changed on the page (added/removed/text/url), the same `effect:{urlChanged,domChanged,settleMs}` as the action tools (around the action itself; covers hover/drag/upload), and the current `generation`. A stale `ref` (or drag destination `to`) is refused with `error:"ref_stale"` (see `browser_snapshot`). Opt-in `confirmSensitive:true` (or env `FUSE_CONFIRM_SENSITIVE=1`): a `click` on a destructive/payment-looking control returns `error:"confirmation_required"` with `category` and `element` and does not click; repeat with `confirmed:true`. Default off.
 
 `pick` = type `value` into a combobox, then click the matching suggestion (`option` text, defaults to `value`) — for airport/city autocompletes.
 
@@ -689,6 +825,10 @@ Extract text, prices, hotel offers, and/or challenges from the live page.
 | `sessionId` | string | yes | Target session. |
 | `kind` | enum `text` \| `prices` \| `hotels` \| `challenges` \| `all` | no | What to extract (default `all`). |
 
+`challenges` returns `{ captcha, turnstile, hcaptcha, cloudflare, login, otp, awsWaf }`. A flag fires on challenge **evidence**, not on a word in the page content: `turnstile` / `hcaptcha` need the widget (element, iframe or script), `cloudflare` needs the Cloudflare challenge marker (`_cf_chl_opt = {` in a script, the same signal as the `browser_fetch` blocked detector), or a **thin** page (< 600 chars of text) carrying the interstitial sentence "checking if the site connection is secure", or an error code `1000`–`1015`/`1020` together with "Ray ID" (Cloudflare 1xxx hard-block pages; matched on text because Cloudflare publishes no default-page markup, and covered by synthetic fixtures only, no real capture). An article that names Cloudflare, Turnstile or "Error 1020" no longer sets the flags.
+
+`login` semantics changed (measured by `tests/unit/challenges-evidence.test.ts`): it is `true` when the page has an `input[type=password]`, **or** an `input[autocomplete=username]` (so a username-first step with no password field is `true`), **or** login-wall wording (`sign in to…`, `log in with…`, `please sign in`, `you must be logged in`, whitespace/newlines tolerated). A page whose only sign-in signal is a nav link (`Sign in` / `Log in`) is now `false` (it was `true`). A username-first form with none of those three cues would also be `false`. `captcha` is evidence-based too: it is `true` on a vendor widget (reCAPTCHA, hCaptcha, Arkose/FunCaptcha, DataDome `captcha-delivery`: element, iframe, script or response field) or a `<form>` with a captcha image and a text input; the words "captcha" / "I'm not a robot" in the text no longer set it (Turnstile keeps its own flag). `awsWaf` is `true` on the `awsWafCookieDomainList` global or a script naming it (the global alone is invisible to `page.evaluate` on the default patchright engine, measured), or `chal_t=` in the URL. The AWS WAF integration SDK (`AwsWafIntegration.getToken()`, `jsapi.js`) that AWS documents for normal protected pages does **not** set it. A page rendering the AWS WAF CAPTCHA puzzle (`AwsWafCaptcha.renderCaptcha`) sets `captcha`. A probe using a pool proxy reports it as blocked when `cloudflare`, `captcha` or `awsWaf` is set. `otp` is unchanged.
+
 ```json
 { "sessionId": "s_abc123", "kind": "prices" }
 ```
@@ -747,6 +887,11 @@ Run several Google searches in one session; returns per-query organic results an
 | `gl` | string | no | Google country (e.g. `us`). |
 | `delayMs` | integer | no | Delay between queries. |
 | _+ all_ [agentOptionShape](#browser_open) | — | no | Engine, proxy, identity, etc. |
+
+Returns `{ rows: [{ query, results: [{ position, title, url, displayUrl?, snippet?, redirect? }], rank?, error?, warning? }] }`.
+
+- **`redirect: true`** — Google's current layout links every organic result as `https://www.google.com/goto?url=<opaque>&gsessionid=…`; the destination is not in the page (the `url` value is an opaque binary token and the `cite` breadcrumb in `displayUrl` is abbreviated and can omit path segments, e.g. `https://host › docs › release` for `https://host/mcp-playwright/docs/release`). `url` is then the wrapper, not the destination. Measured 2026-11-11: a `browser_fetch` of one captured wrapper, outside the SERP session, returned status 200 with the destination as final `url`, so the wrapper is usable as a link (token expiry not measured). With a direct-link layout `url` is the destination and `redirect` is absent. `rankDomain` matches a redirect result on the host of its `displayUrl`.
+- **`warning`** — present only when `results` is empty and there is no `error`: `no_results_extracted` (a results page where nothing was extracted: layout change, or a query with no hits), `consent_wall` (a `consent.google.*` page), `blocked` (Google `/sorry/` page or a reCAPTCHA). Rows with results are unchanged.
 
 > The CLI exposes a `--csv` output flag for this command; it is **CLI-only** and not an MCP parameter. (The probe flag `serpPages` is the equivalent of `pages` for `browser_probe`'s inline SERP extraction.)
 

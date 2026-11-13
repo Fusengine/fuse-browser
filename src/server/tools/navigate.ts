@@ -4,12 +4,14 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { detectSessionBlock } from "../../extraction/challenge-verdict.js";
 import type { SessionManager } from "../../session/manager.js";
 import { DEFAULT_GOTO, gotoWithRetry } from "../../net/navigate.js";
 import { jsonResult } from "../result.js";
+import { sessionBlockShape } from "./schemas-hotel-challenges-output.js";
 import { withSession } from "./with-session.js";
 
-const navigateOutputShape = { url: z.string(), title: z.string() };
+const navigateOutputShape = { url: z.string(), title: z.string(), ...sessionBlockShape };
 
 /** Register `browser_navigate`. */
 export function registerNavigateTool(server: McpServer, sessions: SessionManager): void {
@@ -31,7 +33,8 @@ export function registerNavigateTool(server: McpServer, sessions: SessionManager
           /* networkidle is best-effort */
         }
         if (a.waitMs) await s.page.waitForTimeout(Number(a.waitMs));
-        return jsonResult({ url: s.page.url(), title: await s.page.title() });
+        const block = await detectSessionBlock(s.page);
+        return jsonResult({ url: s.page.url(), title: await s.page.title(), ...block });
       });
     },
   );

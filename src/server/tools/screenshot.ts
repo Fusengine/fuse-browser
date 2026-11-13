@@ -4,9 +4,11 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { guardRef } from "../../actions/ref-guard.js";
 import { refLocator } from "../../actions/ref-locator.js";
+import { registryFor } from "../../actions/ref-registry.js";
 import { annotatedScreenshot } from "../../extraction/annotate.js";
-import { captureSnapshot } from "../../extraction/snapshot.js";
+import { captureSnapshotFull } from "../../extraction/snapshot.js";
 import { applyColorScheme } from "../../lib/color-scheme.js";
 import { type ViewportInput, resolveViewport, viewportLabel } from "../../engine/viewport.js";
 import type { SessionManager } from "../../session/manager.js";
@@ -59,6 +61,8 @@ export function registerScreenshotTool(server: McpServer, sessions: SessionManag
         try {
           if (typeof a.ref === "number" || typeof a.ref === "string") {
             const ref = a.ref;
+            const stale = await guardRef(s.page, ref);
+            if (stale) return errorResult(`ref_stale (${String(stale.reason)}): ${String(stale.hint)}`, "ref_stale");
             const locator = refLocator(s.page, ref);
             if (!locator || (await locator.count()) === 0) return errorResult("ref_not_found");
             const buf = await locator.screenshot({ timeout: 5_000 });
@@ -70,7 +74,7 @@ export function registerScreenshotTool(server: McpServer, sessions: SessionManag
           if (multiErr) return multiErr;
           if (list.length === 0) {
             if (a.annotate === true) {
-              await captureSnapshot(s.page);
+              registryFor(s.page).begin(await captureSnapshotFull(s.page));
               const shot = await annotatedScreenshot(s.page);
               const data = Buffer.from(shot.base64, "base64");
               return withOptionalWrite(path, data, "image/jpeg", () => annotatedScreenshotResult(shot.base64, s.page.url(), shot.marks, path));

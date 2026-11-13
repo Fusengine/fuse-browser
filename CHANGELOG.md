@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.65] - 2026-11-13
+
+### Added
+
+- **R1 safe actions** — element refs now carry stale and sensitive-action guards (a ref from an outdated snapshot or pointing at a sensitive control is refused instead of clicking the wrong element); new `browser_find` tool; `browser_snapshot` accepts `within` to scope the tree to a subtree.
+- **R2 docs-native reading** — new `browser_map` tool (site map from sitemap/llms files, cross-origin `<loc>` dropped as `offOrigin`, robots-disallowed files not fetched unless advertised by `Sitemap:`); `browser_fetch` `focus`/`topK` return the most relevant BM25-ranked passages; site-served markdown is preferred when available.
+- **R3 token diet** — output budget via `maxTokens`/`offset` with `nextOffset` for continuation, `outputMode: "file"` to offload large results to disk, MCP tool annotations on every tool, and presets.
+- **R4 proof of UI change** — new `browser_verify` tool: expect assertions, evidence capture and a receipt.
+- **Blocked-page verdict** — `browser_navigate` and extraction tools report a session `blocked` verdict instead of returning a challenge page as content.
+- Tool count: 51 → 54 (`browser_find`, `browser_map`, `browser_verify`).
+
+### Changed (default behaviour)
+
+- `browser_snapshot` output now adds `generation`, `truncated` and `dropped`.
+- `browser_fetch` prefers site-served markdown (`Accept: text/markdown`, `Link rel=alternate`) and reports which one it used in `source`.
+
 ## [0.1.64] - 2026-07-20
 
 ### Fixed

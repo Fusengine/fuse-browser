@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- SYNTHETIC, not a real capture. Built from AWS WAF's own documentation:
+     - CAPTCHA action response: header x-amzn-waf-action: captcha, HTTP 405, and for Accept: text/html a JavaScript
+       page interstitial with a CAPTCHA script:
+       https://docs.aws.amazon.com/waf/latest/developerguide/waf-captcha-and-challenge-actions.html
+     - puzzle title "Solve the puzzle", AwsWafCaptcha.renderCaptcha(container, ...), a container element and a
+       script loaded from the integration URL:
+       https://docs.aws.amazon.com/waf/latest/developerguide/waf-js-captcha-api-render.html
+       https://docs.aws.amazon.com/waf/latest/developerguide/waf-js-captcha-api-specification.html
+     AWS publishes no markup of the interstitial itself: the exact script host/path below
+     (awswaf.com) and the awsWafCookieDomainList global are NOT from those pages. -->
+<html lang="en">
+<head>
+<title></title>
+<script type="text/javascript" src="https://0000.edge.sdk.awswaf.com/0000/0000/captcha.js" defer></script>
+</head>
+<body>
+<div id="captcha-container"></div>
+<h1>Solve the puzzle</h1>
+<script type="text/javascript">
+  window.awsWafCookieDomainList = [];
+  window.gokuProps = { key: "0000", iv: "0000", context: "0000" };
+  AwsWafCaptcha.renderCaptcha(document.querySelector("#captcha-container"), { apiKey: "0000", onSuccess: function () { location.reload(); } });
+</script>
+</body>
+</html>

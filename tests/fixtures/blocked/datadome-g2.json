@@ -1,0 +1,23 @@
+{
+ "origin": "real response, one plain GET, 2026-11-11, sanitized (cookies, ray ids, IPs, tokens, inline CSS removed)",
+ "url": "https://www.g2.com/",
+ "status": 403,
+ "headers": {
+  "access-control-allow-credentials": "true",
+  "access-control-allow-origin": "*",
+  "access-control-expose-headers": "x-dd-b, x-set-cookie",
+  "cache-control": "max-age=0, private, no-cache, no-store, must-revalidate",
+  "cf-ray": "0000000000000000-ZRH",
+  "charset": "utf-8",
+  "content-type": "text/html;charset=utf-8",
+  "pragma": "no-cache",
+  "server": "cloudflare",
+  "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+  "vary": "accept-encoding",
+  "x-content-type-options": "nosniff",
+  "x-datadome": "protected",
+  "x-datadome-cid": "REDACTED",
+  "x-dd-b": "259"
+ },
+ "html": "<html lang=\"en\"><head><title>g2.com</title><style>/* stripped */</style></head><body style=\"margin:0\"><p id=\"cmsg\">Please enable JS and disable any ad blocker</p><script data-cfasync=\"false\">var dd={'rt':'i','cid':'REDACTED','hsh':'REDACTED','b':2479932,'s':48621,'e':'REDACTED','qp':'','host':'geo.captcha-delivery.com','cookie':'REDACTED'}</script><script data-cfasync=\"false\" src=\"https://ct.captcha-delivery.com/i.js\"></script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML=\"window.__CF$cv$params={r:'0000000000000000',t:'MTc5NDQwNzUzMg=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=0000000000000000',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);\";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>"
+}

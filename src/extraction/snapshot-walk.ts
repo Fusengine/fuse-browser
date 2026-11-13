@@ -16,11 +16,21 @@ export const REF_ATTRIBUTE = "data-fuse-ref";
 const SELECTOR =
   "button,a,input,select,textarea,[role=button],[role=combobox],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=option],[contenteditable=true]";
 
+/** Document-level attribute holding `<token>:<next id>` (the token changes with the document). */
+export const DOC_ATTRIBUTE = "data-fuse-doc";
+
+/** Elements described per frame (the rest are counted as dropped). */
+export const MAX_PER_FRAME = 200;
+
 /**
- * Arrow-function source (run via `evalScript` in each frame). Stamps a LOCAL
- * `data-fuse-ref` (per-frame index) and returns elements in visitation order;
- * the Node side rewrites `index` to a global counter and adds the frame-scoped
- * `ref`. Capped at 200 elements per frame.
+ * Arrow-function source (run via `evalScript` in each frame). Stamps each
+ * element ONCE with a monotonic per-document id in `data-fuse-ref` (an existing
+ * stamp is kept, so refs never renumber when the DOM changes; a stamp copied onto
+ * another node by cloneNode is not honoured there). A new document starts its ids
+ * at `arg.base` (distinct per tab) and never stamps past `arg.cap`. Returns `{ doc, els, dropped }`: elements in visitation
+ * order plus the number of matches beyond `arg.limit` (default 200). The Node
+ * side rewrites `index` to a global counter and builds the frame-scoped `ref`
+ * from `refId`.
  */
 export const SNAPSHOT_SCRIPT = `(arg) => {
   const SEL = '${SELECTOR}';
@@ -31,13 +41,31 @@ export const SNAPSHOT_SCRIPT = `(arg) => {
     const top = document.elementFromPoint(cx, cy);
     return !!top && top !== el && !el.contains(top) && !top.contains(el);
   };
+  const LIMIT = arg && typeof arg.limit === 'number' ? arg.limit : ${MAX_PER_FRAME};
+  const de = document.documentElement;
+  const meta = (de.getAttribute('${DOC_ATTRIBUTE}') || '').split(':');
+  const doc = meta[0] || Math.random().toString(36).slice(2, 10);
+  let seq = Number(meta[1]) >= 0 ? Number(meta[1]) : (arg && typeof arg.base === 'number' ? arg.base : 0);
+  const CAP = arg && typeof arg.cap === 'number' ? arg.cap : Infinity;
+  const nodes = globalThis.__fuseNodes || (globalThis.__fuseNodes = new WeakMap());
+  const stamp = (el, foreign) => {
+    let s = el.getAttribute('${REF_ATTRIBUTE}');
+    if (foreign || s === null || !/^[0-9]+$/.test(s)) {
+      if (seq >= CAP) return null;
+      s = String(seq++);
+      el.setAttribute('${REF_ATTRIBUTE}', s);
+    }
+    nodes.set(el, s);
+    return s;
+  };
   const out = [];
-  const describe = (el, index) => {
+  let dropped = 0;
+  const describe = (el, index, refId) => {
     const r = el.getBoundingClientRect();
     const val = typeof el.value === 'string' ? el.value : null;
     const isCheck = el.type === 'checkbox' || el.type === 'radio';
     return {
-      index,
+      index, refId,
       tag: el.tagName.toLowerCase(),
       text: (el.innerText || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').trim().slice(0, 120),
       role: el.getAttribute('role'), id: el.id || null, name: el.getAttribute('name'),
@@ -54,18 +82,50 @@ export const SNAPSHOT_SCRIPT = `(arg) => {
       box: {x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height)}
     };
   };
-  const visit = (root) => {
-    if (out.length >= 200) return;
-    for (const el of root.querySelectorAll(SEL)) {
-      if (out.length >= 200) return;
-      const i = out.length;
-      el.setAttribute('${REF_ATTRIBUTE}', String(i));
-      out.push(describe(el, i));
-    }
+  const all = [];
+  const have = new Set();
+  const add = (el) => { if (!have.has(el)) { have.add(el); all.push(el); } };
+  const collect = (root) => {
+    for (const el of root.querySelectorAll(SEL)) add(el);
     for (const host of root.querySelectorAll('*')) {
-      if (host.shadowRoot) visit(host.shadowRoot);
+      if (host.shadowRoot) collect(host.shadowRoot);
     }
   };
-  visit(document);
-  return out;
+  const W = arg && arg.within;
+  let matched;
+  if (!W) collect(document);
+  else {
+    // Scoped walk: only the subtree(s) of a CSS selector, or of the node the ref names.
+    const roots = [];
+    const stamped = (root) => {
+      for (const el of root.querySelectorAll('[${REF_ATTRIBUTE}="' + W.local + '"]')) if (nodes.get(el) === W.local) roots.push(el);
+      for (const h of root.querySelectorAll('*')) if (h.shadowRoot) stamped(h.shadowRoot);
+    };
+    try {
+      if (W.css !== undefined) roots.push(...document.querySelectorAll(W.css));
+      else stamped(document);
+    } catch (e) {
+      return { doc, els: [], dropped: 0, matched: 0, scopeError: 'invalid_selector' };
+    }
+    matched = roots.length;
+    for (const r of roots) {
+      if (r.matches(SEL)) add(r);
+      collect(r);
+      if (r.shadowRoot) collect(r.shadowRoot);
+    }
+  }
+  // A stamp is honoured only on the node that received it from this walk (tracked in a
+  // WeakMap, which cloneNode/replaceWith copies do NOT inherit): a clone carrying a copied
+  // stamp is foreign and gets a fresh id (or loses the stamp past the limit), so an old
+  // ref can never land on a clone. Past the tab's id namespace (CAP) nothing is stamped.
+  all.forEach((el, i) => {
+    const s = el.getAttribute('${REF_ATTRIBUTE}');
+    const own = s !== null && nodes.get(el) === s;
+    if (i >= LIMIT) { dropped++; if (s !== null && !own) el.removeAttribute('${REF_ATTRIBUTE}'); return; }
+    const refId = stamp(el, !own);
+    if (refId === null) { dropped++; return; }
+    out.push(describe(el, out.length, refId));
+  });
+  de.setAttribute('${DOC_ATTRIBUTE}', doc + ':' + seq);
+  return { doc, els: out, dropped, matched };
 }`;

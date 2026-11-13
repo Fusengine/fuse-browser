@@ -7,12 +7,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { crawl } from "../../agent/crawl.js";
+import { BUDGET_INPUT_SHAPE, BUDGET_OUTPUT_SHAPE, budgetResult } from "../output-budget.js";
 import { progressReporter } from "../progress.js";
-import { jsonResult } from "../result.js";
 import { crawlPageSchema } from "./schemas-fetch-output.js";
 
 /** `browser_crawl` output shape: the discovered pages, in crawl order. */
-export const CRAWL_OUTPUT_SHAPE = { count: z.number(), pages: z.array(crawlPageSchema) };
+export const CRAWL_OUTPUT_SHAPE = { count: z.number(), pages: z.array(crawlPageSchema), ...BUDGET_OUTPUT_SHAPE };
 
 /** Register `browser_crawl`. */
 export function registerCrawlTool(server: McpServer): void {
@@ -21,7 +21,7 @@ export function registerCrawlTool(server: McpServer): void {
     {
       title: "HTTP crawl (fast-path)",
       description:
-        "Crawl a site from a seed URL via the HTTP fast-path — NO browser launch. Breadth-first, fetching each depth level in parallel, returning clean markdown per page. Same-origin and robots.txt-honored by default; bounded by maxPages (default 25) and maxDepth (default 2). Use this to grab a whole docs section / blog / set of pages in one call. For JS/SPA pages set browserFallback:true (renders empty shells in a real browser, per page).",
+        "Crawl a site from a seed URL via the HTTP fast-path — NO browser launch. Breadth-first, fetching each depth level in parallel, returning clean markdown per page. Same-origin and robots.txt-honored by default; bounded by maxPages (default 25) and maxDepth (default 2). Use this to grab a whole docs section / blog / set of pages in one call. For JS/SPA pages set browserFallback:true (renders empty shells in a real browser, per page). A page answered by an anti-bot interstitial is returned with blocked:true, blockedBy and a hint (see browser_fetch) and its links are not followed. A PDF page is read as page-marked text with pageCount (no links are followed out of it).",
       inputSchema: {
         url: z.string(),
         maxPages: z.number().int().optional(),
@@ -34,6 +34,7 @@ export function registerCrawlTool(server: McpServer): void {
         respectRobots: z.boolean().optional(),
         throttleMs: z.number().int().optional(),
         proxyUrl: z.string().optional(),
+        ...BUDGET_INPUT_SHAPE,
       },
       outputSchema: CRAWL_OUTPUT_SHAPE,
     },
@@ -53,7 +54,7 @@ export function registerCrawlTool(server: McpServer): void {
         throttleMs: num(a.throttleMs),
         proxyUrl: typeof a.proxyUrl === "string" ? a.proxyUrl : undefined,
       });
-      return jsonResult({ ...result });
+      return budgetResult("browser_crawl", { ...result }, "pages", a);
     },
   );
 }
