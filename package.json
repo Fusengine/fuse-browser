@@ -1,16 +1,16 @@
 {
   "name": "@fusengine/browser-mcp",
-  "version": "0.1.65",
+  "version": "0.1.66",
   "description": "MCP server + CLI giving AI agents a real, stealth browser (Patchright/Playwright) — per-country identity, self-healing actions, snapshots, multi-step plans, structured extraction, CDP attach.",
   "license": "MIT",
   "author": "Fusengine",
-  "homepage": "https://github.com/fusengine/fuse-browser#readme",
+  "homepage": "https://github.com/Fusengine/fuse-browser#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fusengine/fuse-browser.git"
+    "url": "git+https://github.com/Fusengine/fuse-browser.git"
   },
   "bugs": {
-    "url": "https://github.com/fusengine/fuse-browser/issues"
+    "url": "https://github.com/Fusengine/fuse-browser/issues"
   },
   "keywords": [
     "mcp",
