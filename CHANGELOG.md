@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.66] - 2026-11-16
+
+### Fixed
+
+- **npm provenance verification** — `package.json` `repository.url`, `homepage` and `bugs.url` now use the GitHub canonical name `Fusengine/fuse-browser`, so npm's sigstore provenance check (which rejected 0.1.65 with E422, repository mismatch) passes.
+
+> 0.1.65 was tagged but never published to npm. 0.1.66 carries all 0.1.65 changes listed below.
+
 ## [0.1.65] - 2026-11-13
 
 ### Added
